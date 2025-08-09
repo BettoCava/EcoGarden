@@ -1,0 +1,32 @@
+{
+  "name": "ecogarden",
+  "version": "1.0.0",
+  "description": "Un'applicazione per la gestione di un giardino ecologico",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "seed": "node seed.js",
+    "seed:admin": "node seed-admin.js"
+  },
+  "keywords": [
+    "express",
+    "nodejs",
+    "mongodb",
+    "ecogarden"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.3.1",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "fullcalendar": "^6.1.18",
+    "mongoose": "^7.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Login - EcoGarden' %></title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Responsive CSS -->
+    <link href="/css/responsive.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        
+        .login-card {
+            max-width: 400px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 2.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .login-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #198754, #20c997);
+        }
+        
+        .brand {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .brand-icon {
+            font-size: 3rem;
+            color: #198754;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        
+        .brand-name {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #495057;
+            margin: 0;
+        }
+        
+        .brand-subtitle {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+        
+        .form-floating > label {
+            color: #6c757d;
+        }
+        
+        .form-control {
+            border-radius: 12px;
+            border: 1px solid #dee2e6;
+            padding: 0.75rem 1rem;
+            height: auto;
+        }
+        
+        .form-control:focus {
+            border-color: #198754;
+            box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+        }
+        
+        .btn-login {
+            background: linear-gradient(135deg, #198754, #20c997);
+            border: none;
+            color: white;
+            padding: 0.75rem;
+            border-radius: 12px;
+            font-weight: 500;
+            width: 100%;
+            margin-top: 1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(25, 135, 84, 0.3);
+        }
+        
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(25, 135, 84, 0.4);
+            color: white;
+        }
+        
+        .btn-login:disabled {
+            transform: none;
+            opacity: 0.6;
+        }
+        
+        .alert {
+            border-radius: 12px;
+            border: none;
+        }
+        
+        .success-message {
+            background-color: #d1e7dd;
+            color: #0f5132;
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .input-group-text {
+            background: transparent;
+            border-right: none;
+            color: #6c757d;
+        }
+        
+        .form-control-with-icon {
+            border-left: none;
+            padding-left: 0;
+        }
+        
+        .input-group {
+            border: 1px solid #dee2e6;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .input-group:focus-within {
+            border-color: #198754;
+            box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+        }
+        
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 2rem 1.5rem;
+                margin: 1rem;
+            }
+            
+            .brand-name {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <!-- Brand -->
+            <div class="brand">
+                <i class="bi bi-tree-fill brand-icon"></i>
+                <h1 class="brand-name">EcoGarden</h1>
+                <p class="brand-subtitle">Sistema di Gestione Campeggio</p>
+            </div>
+            
+            <!-- Success message for logout -->
+            <% if (typeof query !== 'undefined' && query.message === 'logout_success') { %>
+                <div class="success-message">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    Logout effettuato con successo
+                </div>
+            <% } %>
+            
+            <!-- Error message -->
+            <% if (error) { %>
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <%= error %>
+                </div>
+            <% } %>
+            
+            <!-- Login Form -->
+            <form method="POST" action="/login" id="loginForm">
+                <div class="mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-person"></i>
+                        </span>
+                        <input 
+                            type="text" 
+                            class="form-control form-control-with-icon" 
+                            id="username" 
+                            name="username" 
+                            placeholder="Nome utente"
+                            required 
+                            autofocus
+                            autocomplete="username"
+                        >
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-lock"></i>
+                        </span>
+                        <input 
+                            type="password" 
+                            class="form-control form-control-with-icon" 
+                            id="password" 
+                            name="password" 
+                            placeholder="Password"
+                            required
+                            autocomplete="current-password"
+                        >
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-login" id="loginBtn">
+                    <span class="btn-text">
+                        <i class="bi bi-box-arrow-in-right me-2"></i>
+                        Accedi
+                    </span>
+                    <span class="btn-loading d-none">
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        Accesso in corso...
+                    </span>
+                </button>
+            </form>
+            
+            <!-- Footer -->
+            <div class="text-center mt-4">
+                <small class="text-muted">
+                    <i class="bi bi-shield-check me-1"></i>
+                    Accesso sicuro per operatori autorizzati
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Gestione loading del form
+        document.getElementById('loginForm').addEventListener('submit', function() {
+            const btn = document.getElementById('loginBtn');
+            const btnText = btn.querySelector('.btn-text');
+            const btnLoading = btn.querySelector('.btn-loading');
+            
+            btn.disabled = true;
+            btnText.classList.add('d-none');
+            btnLoading.classList.remove('d-none');
+        });
+        
+        // Auto-dismiss alerts dopo 5 secondi
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                alert.style.transition = 'opacity 0.5s';
+                alert.style.opacity = '0';
+                setTimeout(function() {
+                    alert.remove();
+                }, 500);
+            });
+        }, 5000);
+    </script>
+</body>
+</html>

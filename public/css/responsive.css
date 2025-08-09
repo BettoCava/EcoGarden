@@ -1,0 +1,302 @@
+/* Stili responsive per EcoGarden */
+
+/* Mobile First - Stili base per mobile */
+@media (max-width: 767.98px) {
+    /* Calendario FullCalendar su mobile */
+    .fc {
+        font-size: 14px;
+    }
+    
+    /* Override altezze fisse per migliorare lo scroll su mobile */
+    #calendar { 
+        height: auto !important; 
+        min-height: 0 !important; 
+    }
+    .calendar-container { padding: 12px; }
+
+    .fc-toolbar {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .fc-toolbar-chunk {
+        display: flex;
+        justify-content: center;
+    }
+    
+    .fc-button {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    .fc-event {
+        font-size: 12px;
+        padding: 2px 4px;
+    }
+    
+    .fc-list-event-title {
+        font-weight: 600;
+        white-space: normal;
+        word-break: break-word;
+        line-height: 1.25;
+    }
+
+    /* Rende la toolbar del calendario sticky su mobile per facile navigazione */
+    .fc .fc-header-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #fff;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #eee;
+    }
+
+    /* Header e navigazione mobile */
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+    
+    .navbar-nav .nav-link {
+        padding: 12px 16px;
+        font-size: 16px;
+    }
+    
+    /* Cards responsive */
+    .card {
+        margin-bottom: 1rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    /* Floating Action Button per mobile */
+    .fab-mobile {
+        position: fixed;
+        bottom: calc(20px + env(safe-area-inset-bottom));
+        right: calc(20px + env(safe-area-inset-right));
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: #28a745;
+        color: white;
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        transition: all 0.3s ease;
+    }
+    
+    .fab-mobile:hover {
+        background: #218838;
+        transform: scale(1.05);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    }
+    
+    .fab-mobile:active {
+        transform: scale(0.95);
+    }
+    
+    /* Modal fullscreen su mobile */
+    .modal-fullscreen-sm-down .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+    }
+    
+    .modal-fullscreen-sm-down .modal-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    /* Form controls più grandi su mobile */
+    .form-control-lg, .form-select-lg {
+        padding: 12px 16px;
+        font-size: 16px; /* Previene lo zoom su iOS */
+        line-height: 1.5;
+    }
+    
+    /* Buttons più grandi su mobile */
+    .btn-lg {
+        padding: 12px 24px;
+        font-size: 16px;
+        border-radius: 8px;
+    }
+    
+    /* Toast notifications posizionamento mobile */
+    .toast {
+        margin: 1rem !important;
+        max-width: calc(100vw - 2rem) !important;
+    }
+    
+    /* Statistics cards layout mobile */
+    .stats-row .col {
+        margin-bottom: 1rem;
+    }
+    
+    .stat-card {
+        padding: 1.5rem;
+        text-align: center;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+    
+    /* Loading spinner mobile */
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+    
+    /* Alert messages su mobile */
+    .alert {
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    
+    .alert i {
+        margin-right: 8px;
+    }
+}
+
+/* Event template styles used by JS (both mobile/desktop) */
+.fc-list-custom, .fc-grid-custom {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.fc-list-custom i { opacity: 0.9; }
+
+/* Migliora contrasto del nome piazzola all'interno degli eventi */
+.fc .pitch-name {
+    color: rgba(255,255,255,0.85);
+}
+.fc-theme-standard .fc-list .pitch-name {
+    color: #495057; /* scuro su sfondo chiaro nella lista */
+}
+
+/* Nascondi testi orari/"all-day" predefiniti di FullCalendar nelle viste usate */
+.fc .fc-daygrid .fc-event .fc-event-time { display: none !important; }
+.fc .fc-list .fc-event-time { display: none !important; }
+/* Nel caso si passi a timeGrid, nascondi sezione all-day */
+.fc .fc-timegrid .fc-timegrid-allday { display: none !important; }
+
+/* Nascondi header "All-day" nella vista timeGrid nel caso fosse usata in futuro */
+.fc .fc-timegrid .fc-timegrid-allday { display: none; }
+
+/* Tablet Portrait */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .fc {
+        font-size: 15px;
+    }
+    
+    .fc-button {
+        padding: 6px 12px;
+    }
+    
+    .modal-dialog {
+        max-width: 90%;
+    }
+}
+
+/* Desktop */
+@media (min-width: 992px) {
+    /* Nascondi FAB su desktop */
+    .fab-mobile {
+        display: none;
+    }
+    
+    /* Calendario più compatto su desktop */
+    .fc-event {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .fc-event:hover {
+        opacity: 0.8;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+}
+
+/* Stili per touch devices */
+@media (hover: none) and (pointer: coarse) {
+    /* Aumenta l'area touch per i bottoni */
+    .btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    .fc-button {
+        min-height: 40px;
+        min-width: 40px;
+    }
+    
+    /* Rimuovi hover effects sui touch devices */
+    .fc-event:hover {
+        opacity: 1;
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .btn:hover {
+        transform: none;
+    }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .fc {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+}
+
+/* Landscape orientation su mobile */
+@media (max-width: 767.98px) and (orientation: landscape) {
+    .modal-fullscreen-sm-down {
+        height: 100vh;
+    }
+    
+    .modal-fullscreen-sm-down .modal-body {
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+    }
+    
+    .fc-toolbar {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+}
+
+/* Accessibilità */
+@media (prefers-reduced-motion: reduce) {
+    .fab-mobile,
+    .fc-event,
+    .btn {
+        transition: none;
+    }
+}

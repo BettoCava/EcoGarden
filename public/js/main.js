@@ -1,0 +1,1138 @@
+// Attendi il caricamento completo del DOM
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // Array di colori scuri e vivaci per le piazzole
+    const uniqueBookingColors = [
+        '#800080', // Viola scuro
+        '#006400', // Verde scuro
+        '#8B4513', // Marrone scuro
+        '#FF6347', // Rosso pomodoro
+        '#4682B4', // Blu acciaio
+        '#2F4F4F', // Grigio ardesia scuro
+        '#8B0000', // Rosso scuro
+        '#FF8C00', // Arancione scuro
+        '#556B2F', // Verde oliva scuro
+        '#8B008B', // Magenta scuro
+        '#483D8B', // Blu ardesia scuro
+        '#A0522D', // Marrone siena
+        '#CD853F', // Marrone sabbia
+        '#D2691E', // Cioccolato
+        '#B22222', // Rosso mattone
+        '#191970', // Blu notte
+        '#708090', // Grigio ardesia
+        '#DC143C', // Cremisi
+        '#00CED1', // Turchese scuro
+        '#9932CC'  // Orchidea scuro
+    ];
+    
+    // Funzione helper per convertire da formato ISO a dd/mm/yyyy
+    function formatISOToDDMMYYYY(isoDate) {
+        if (!isoDate) return '';
+        const date = new Date(isoDate);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    }
+    
+    // Funzione helper per convertire da dd/mm/yyyy a formato ISO
+    function formatDDMMYYYYToISO(ddmmyyyy) {
+        if (!ddmmyyyy) return '';
+        const parts = ddmmyyyy.split('/');
+        if (parts.length !== 3) return '';
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    
+    // Funzione helper per formattare le date per l'input
+    function formatDateToInput(date) {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    
+    // Funzione helper per formattare le date in dd/mm/yyyy
+    function formatDateToDDMMYYYY(dateString) {
+        const parts = dateString.split('-');
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    
+    // Elementi del DOM
+    const calendarEl = document.getElementById('calendar');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const refreshBtn = document.getElementById('refreshCalendar');
+    const addBookingBtn = document.getElementById('addBookingBtn');
+    
+    // Variabile per l'istanza del calendario
+    let calendar;
+    
+    // Funzione per mostrare/nascondere lo spinner di caricamento
+    function toggleLoading(show) {
+        if (loadingSpinner) {
+            if (show) {
+                loadingSpinner.classList.remove('d-none');
+            } else {
+                loadingSpinner.classList.add('d-none');
+            }
+        }
+    }
+    
+    // Funzione per caricare i dati del calendario
+    async function loadCalendarData() {
+        try {
+            toggleLoading(true);
+            
+            // Chiamata fetch all'endpoint API per ottenere risorse ed eventi
+            const response = await fetch('/api/data', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Errore HTTP: ${response.status} ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            // Verifica che i dati abbiano la struttura corretta
+            if (!data.resources || !data.events) {
+                throw new Error('Formato dati non valido: mancano resources o events');
+            }
+            
+            console.log('Dati caricati:', {
+                resources: data.resources.length,
+                events: data.events.length
+            });
+            
+            return data;
+            
+        } catch (error) {
+            console.error('Errore nel caricamento dei dati:', error);
+            
+            // Mostra un messaggio di errore all'utente
+            showErrorMessage('Errore nel caricamento dei dati del calendario. Riprova più tardi.');
+            
+            // Ritorna dati vuoti per permettere al calendario di inizializzarsi
+            return {
+                resources: [],
+                events: []
+            };
+        } finally {
+            toggleLoading(false);
+        }
+    }
+    
+    // Funzione per mostrare messaggi di errore
+    function showErrorMessage(message) {
+        // Crea un toast Bootstrap per mostrare l'errore
+        const toastHtml = `
+            <div class="toast align-items-center text-white bg-danger border-0 position-fixed top-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index: 9999;">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        // Aggiungi il toast al body
+        document.body.insertAdjacentHTML('beforeend', toastHtml);
+        
+        // Inizializza e mostra il toast
+        const toastElement = document.body.lastElementChild;
+        const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+        toast.show();
+        
+        // Rimuovi il toast dal DOM dopo che è nascosto
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
+    
+    // Funzione per inizializzare il calendario
+    async function initializeCalendar() {
+        try {
+            // Carica i dati
+            const calendarData = await loadCalendarData();
+            
+            // Inizializza FullCalendar
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                // Vista principale - responsiva
+                initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
+                
+                // Viste disponibili - adattate per mobile
+                headerToolbar: window.innerWidth < 768 ? {
+                    left: 'prev,next',
+                    center: 'title',
+                    right: 'today'
+                } : {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth' // rimosso pitchWeekView
+                },
+                
+                // Nascondi orari/All-day ovunque
+                displayEventTime: false,
+                
+                // Formato intestazioni per la vista lista (mobile)
+                listDayFormat: { weekday: 'short', day: 'numeric', month: 'short' },
+                listDaySideFormat: false,
+                
+                // Configurazione responsiva
+                height: 'auto',
+                contentHeight: 'auto',
+                aspectRatio: window.innerWidth < 768 ? 0.8 : 1.8,
+                
+                // Localizzazione italiana
+                locale: 'it',
+                firstDay: 1, // Lunedì come primo giorno della settimana
+                
+                // Eventi (prenotazioni)
+                events: calendarData.events,
+                
+                // Configurazione eventi
+                eventDisplay: 'block',
+                /* eventTextColor removed to allow proper contrast in list view */
+                eventBorderWidth: 0,
+
+                // Contenuto personalizzato degli eventi (più leggibile su mobile)
+                eventContent: function(arg) {
+                    const props = arg.event.extendedProps || {};
+                    const title = props.guestName || arg.event.title || '';
+                    const pitch = props.pitchName ? ` <span class="pitch-name">• ${props.pitchName}</span>` : '';
+                    if (arg.view && arg.view.type && arg.view.type.startsWith('list')) {
+                        return { html: `<div class="fc-list-custom"><i class="bi bi-person me-1"></i>${title}${pitch}</div>` };
+                    }
+                    return { html: `<div class="fc-grid-custom">${title}${pitch}</div>` };
+                },
+                
+                // Callback per il rendering degli eventi
+                eventDidMount: function(info) {
+                    // Aggiungi tooltip con informazioni dettagliate
+                    if (info.event.extendedProps) {
+                        const props = info.event.extendedProps;
+                        const tooltipContent = `
+                            <strong>Ospite:</strong> ${props.guestName || info.event.title}<br>
+                            <strong>Piazzola:</strong> ${props.pitchName || 'N/A'}<br>
+                            <strong>Durata:</strong> ${props.duration || 'N/A'} giorni<br>
+                            <strong>Creato da:</strong> ${props.createdBy || 'N/A'}
+                        `;
+                        
+                        info.el.setAttribute('data-bs-toggle', 'tooltip');
+                        info.el.setAttribute('data-bs-placement', 'top');
+                        info.el.setAttribute('data-bs-html', 'true');
+                        info.el.setAttribute('data-bs-title', tooltipContent);
+                        
+                        // Inizializza il tooltip
+                        new bootstrap.Tooltip(info.el);
+                    }
+                },
+                
+                // Callback per click sugli eventi (modifica prenotazione)
+                eventClick: function(info) {
+                    // Controlla se l'utente è un visualizzatore - i visualizzatori non possono modificare prenotazioni
+                    if (window.operatorData && window.operatorData.role === 'viewer') {
+                        return; // Non fare nulla se l'utente è un visualizzatore
+                    }
+                    
+                    const event = info.event;
+                    const props = event.extendedProps;
+                    
+                    // Mostra modal per modifica prenotazione
+                    showEditBookingModal(event, props);
+                },
+                
+                // Callback per click su data (nuova prenotazione)
+                dateClick: function(info) {
+                    // Controlla se l'utente è un visualizzatore - i visualizzatori non possono creare prenotazioni
+                    if (window.operatorData && window.operatorData.role === 'viewer') {
+                        return; // Non fare nulla se l'utente è un visualizzatore
+                    }
+                    showCreateBookingModal(info.date, null);
+                }
+            });
+            
+            // Renderizza il calendario
+            calendar.render();
+            
+            // Gestisci il ridimensionamento della finestra
+            window.addEventListener('resize', function() {
+                if (!calendar) return;
+                
+                const isMobile = window.innerWidth < 768;
+                const currentView = calendar.view ? calendar.view.type : null;
+
+                if (isMobile) {
+                    // Su mobile usiamo sempre la vista lista settimana
+                    if (currentView !== 'listWeek') {
+                        calendar.changeView('listWeek');
+                    }
+                    calendar.setOption('headerToolbar', {
+                        left: 'prev,next',
+                        center: 'title',
+                        right: 'today'
+                    });
+                    calendar.setOption('aspectRatio', 0.8);
+                } else {
+                    // Su desktop default a month se eravamo in listWeek
+                    if (currentView === 'listWeek') {
+                        calendar.changeView('dayGridMonth');
+                    }
+                    calendar.setOption('headerToolbar', {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth'
+                    });
+                    calendar.setOption('aspectRatio', 1.8);
+                }
+
+                calendar.updateSize();
+            });
+            
+            console.log('Calendario inizializzato con successo');
+            
+        } catch (error) {
+            console.error('Errore nell\'inizializzazione del calendario:', error);
+            showErrorMessage('Errore nell\'inizializzazione del calendario.');
+        }
+    }
+    
+    // Funzione per mostrare i dettagli della prenotazione
+    function showBookingDetails(event, props) {
+        // Determina se siamo su mobile
+        const isMobile = window.innerWidth < 768;
+        
+        const modalHtml = `
+            <div class="modal fade" id="bookingModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog ${isMobile ? 'modal-fullscreen-sm-down' : ''}">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-calendar-event me-2"></i>
+                                Dettagli Prenotazione
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="${isMobile ? 'mb-3' : 'row'}">
+                                <div class="${isMobile ? 'fw-bold mb-1' : 'col-sm-4'}"><strong>Ospite:</strong></div>
+                                <div class="${isMobile ? 'mb-3' : 'col-sm-8'}">${props.guestName || event.title}</div>
+                            </div>
+                            <div class="${isMobile ? 'mb-3' : 'row mt-2'}">
+                                <div class="${isMobile ? 'fw-bold mb-1' : 'col-sm-4'}"><strong>Piazzola:</strong></div>
+                                <div class="${isMobile ? 'mb-3' : 'col-sm-8'}">${props.pitchName || 'N/A'}</div>
+                            </div>
+                            <div class="${isMobile ? 'mb-3' : 'row mt-2'}">
+                                <div class="${isMobile ? 'fw-bold mb-1' : 'col-sm-4'}"><strong>Check-in:</strong></div>
+                                <div class="${isMobile ? 'mb-3' : 'col-sm-8'}">${props.startDateFormatted || formatISOToDDMMYYYY(event.startStr) || (event.start ? formatISOToDDMMYYYY(event.start.toISOString().split('T')[0]) : 'N/A')}</div>
+                            </div>
+                            <div class="${isMobile ? 'mb-3' : 'row mt-2'}">
+                                <div class="${isMobile ? 'fw-bold mb-1' : 'col-sm-4'}"><strong>Check-out:</strong></div>
+                                <div class="${isMobile ? 'mb-3' : 'col-sm-8'}">${props.endDateFormatted || formatISOToDDMMYYYY(event.endStr) || (event.end ? formatISOToDDMMYYYY(event.end.toISOString().split('T')[0]) : 'N/A')}</div>
+                            </div>
+                            <div class="${isMobile ? 'mb-3' : 'row mt-2'}">
+                                <div class="${isMobile ? 'fw-bold mb-1' : 'col-sm-4'}"><strong>Durata:</strong></div>
+                                <div class="${isMobile ? 'mb-3' : 'col-sm-8'}">${props.duration || 'N/A'} giorni</div>
+                            </div>
+                            <div class="${isMobile ? 'mb-3' : 'row mt-2'}">
+                                <div class="${isMobile ? 'fw-bold mb-1' : 'col-sm-4'}"><strong>Creato da:</strong></div>
+                                <div class="${isMobile ? '' : 'col-sm-8'}">
+                                    ${props.createdBy || 'N/A'}
+                                    ${props.createdByRole ? `<span class="badge bg-${props.createdByRole === 'admin' ? 'danger' : 'primary'} ms-2">${props.createdByRole}</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary ${isMobile ? 'btn-lg w-100' : ''}" data-bs-dismiss="modal">Chiudi</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Rimuovi modal esistente se presente
+        const existingModal = document.getElementById('bookingModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Aggiungi nuovo modal
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Mostra il modal
+        const modal = new bootstrap.Modal(document.getElementById('bookingModal'));
+        modal.show();
+        
+        // Rimuovi il modal dal DOM quando viene nascosto
+        document.getElementById('bookingModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+    }
+    
+    // Funzione per mostrare il modal di creazione prenotazione
+    function showCreateBookingModal(selectedDate, selectedPitchId) {
+        const formattedDate = formatDateToInput(selectedDate);
+        const tomorrowDate = new Date(selectedDate);
+        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+        const formattedEndDate = formatDateToInput(tomorrowDate);
+        
+        // Determina se siamo su mobile
+        const isMobile = window.innerWidth < 768;
+        
+        const modalHtml = `
+            <div class="modal fade" id="createBookingModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog ${isMobile ? 'modal-fullscreen-sm-down' : ''}">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-calendar-plus me-2"></i>
+                                Nuova Prenotazione
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form id="createBookingForm">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="createGuestName" class="form-label">Nome Ospite *</label>
+                                    <input type="text" class="form-control ${isMobile ? 'form-control-lg' : ''}" id="createGuestName" name="guestName" required>
+                                </div>
+                                <div class="${isMobile ? '' : 'row'}">
+                                    <div class="${isMobile ? 'mb-3' : 'col-md-6'}">
+                                        <div class="mb-3">
+                                            <label for="createStartDate" class="form-label">Data Inizio *</label>
+                                            <input type="date" class="form-control ${isMobile ? 'form-control-lg' : ''}" id="createStartDate" name="start" 
+                                                   value="${formattedDate}" required>
+                                        </div>
+                                    </div>
+                                    <div class="${isMobile ? 'mb-3' : 'col-md-6'}">
+                                        <div class="mb-3">
+                                            <label for="createEndDate" class="form-label">Data Fine *</label>
+                                            <input type="date" class="form-control ${isMobile ? 'form-control-lg' : ''}" id="createEndDate" name="end" 
+                                                   value="${formattedEndDate}" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="createCategorySelect" class="form-label">Categoria *</label>
+                                    <select class="form-select ${isMobile ? 'form-select-lg' : ''}" id="createCategorySelect" required>
+                                        <option value="">Seleziona una categoria</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="createPitchSelect" class="form-label">Piazzola *</label>
+                                    <select class="form-select ${isMobile ? 'form-select-lg' : ''}" id="createPitchSelect" name="pitchId" required disabled>
+                                        <option value="">Prima seleziona una categoria</option>
+                                    </select>
+                                </div>
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    Seleziona prima una categoria, poi una piazzola disponibile per il periodo scelto
+                                </div>
+                            </div>
+                            <div class="modal-footer ${isMobile ? 'd-grid gap-2' : ''}">
+                                <button type="button" class="btn btn-secondary ${isMobile ? 'btn-lg' : ''}" data-bs-dismiss="modal">Annulla</button>
+                                <button type="submit" class="btn btn-success ${isMobile ? 'btn-lg' : ''}">
+                                    <i class="bi bi-check-lg me-2"></i>Crea Prenotazione
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Rimuovi modal esistente se presente
+        const existingModal = document.getElementById('createBookingModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Aggiungi nuovo modal
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Carica le categorie e imposta gli event listener
+        loadCategories();
+        setupCascadingSelects();
+        
+        // Se abbiamo una piazzola preselezionata, impostala dopo aver caricato i dati
+        if (selectedPitchId) {
+            console.log('Piazzola preselezionata:', selectedPitchId);
+            setTimeout(async () => {
+                await preselectPitchInModal(selectedPitchId);
+            }, 500);
+        }
+        
+        // Mostra il modal
+        const modal = new bootstrap.Modal(document.getElementById('createBookingModal'));
+        modal.show();
+        
+        // Gestisci il submit del form
+        document.getElementById('createBookingForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await handleCreateBooking(this, modal);
+        });
+        
+        // Rimuovi il modal dal DOM quando viene nascosto
+        document.getElementById('createBookingModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+        
+        // Focus sul campo nome ospite
+        setTimeout(() => {
+            document.getElementById('createGuestName').focus();
+        }, 300);
+    }
+    
+    // Funzione per caricare le categorie
+    async function loadCategories() {
+        try {
+            const response = await fetch('/api/categories');
+            const categories = await response.json();
+            
+            const categorySelect = document.getElementById('createCategorySelect');
+            if (categorySelect && categories) {
+                categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category._id;
+                    option.textContent = category.name;
+                    categorySelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Errore nel caricamento delle categorie:', error);
+        }
+    }
+    
+    // Funzione per configurare la selezione a cascata
+    function setupCascadingSelects() {
+        const categorySelect = document.getElementById('createCategorySelect');
+        const pitchSelect = document.getElementById('createPitchSelect');
+        const startDateInput = document.getElementById('createStartDate');
+        const endDateInput = document.getElementById('createEndDate');
+        
+        // Event listener per il cambio di categoria
+        categorySelect.addEventListener('change', async function() {
+            const categoryId = this.value;
+            pitchSelect.innerHTML = '<option value="">Seleziona una piazzola</option>';
+            pitchSelect.disabled = !categoryId;
+            
+            if (categoryId) {
+                await loadAvailablePitchesByCategory(categoryId, startDateInput.value, endDateInput.value);
+            }
+        });
+        
+        // Event listener per il cambio delle date
+        const updatePitches = async () => {
+            const categoryId = categorySelect.value;
+            if (categoryId) {
+                pitchSelect.innerHTML = '<option value="">Seleziona una piazzola</option>';
+                await loadAvailablePitchesByCategory(categoryId, startDateInput.value, endDateInput.value);
+            }
+        };
+        
+        startDateInput.addEventListener('change', updatePitches);
+        endDateInput.addEventListener('change', updatePitches);
+    }
+    
+    // Funzione per caricare le piazzole disponibili per categoria
+    async function loadAvailablePitchesByCategory(categoryId, startDate, endDate) {
+        try {
+            const params = new URLSearchParams({
+                categoryId,
+                startDate: startDate || '',
+                endDate: endDate || ''
+            });
+            
+            const response = await fetch(`/api/available-pitches?${params}`);
+            const pitches = await response.json();
+            
+            const pitchSelect = document.getElementById('createPitchSelect');
+            if (pitchSelect && pitches) {
+                pitches.forEach(pitch => {
+                    const option = document.createElement('option');
+                    option.value = pitch._id;
+                    option.textContent = pitch.name;
+                    option.setAttribute('data-category', pitch.category.name);
+                    pitchSelect.appendChild(option);
+                });
+                
+                if (pitches.length === 0) {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'Nessuna piazzola disponibile per questo periodo';
+                    option.disabled = true;
+                    pitchSelect.appendChild(option);
+                }
+            }
+        } catch (error) {
+            console.error('Errore nel caricamento delle piazzole:', error);
+        }
+    }
+    
+    // Funzione per preselezionare una piazzola nel modal di creazione
+    async function preselectPitchInModal(pitchId) {
+        try {
+            // Carica la piazzola specifica per ottenere la categoria
+            const response = await fetch(`/api/pitches/${pitchId}`);
+            const pitch = await response.json();
+            
+            const categorySelect = document.getElementById('createCategorySelect');
+            const pitchSelect = document.getElementById('createPitchSelect');
+            
+            if (categorySelect && pitchSelect && pitch) {
+                // Seleziona la categoria
+                categorySelect.value = pitch.category._id;
+                
+                // Trigger change event per caricare le piazzole
+                const changeEvent = new Event('change');
+                categorySelect.dispatchEvent(changeEvent);
+                
+                // Attendi che le piazzole si carichino e seleziona quella desiderata
+                setTimeout(() => {
+                    pitchSelect.value = pitchId;
+                }, 100);
+            }
+        } catch (error) {
+            console.error('Errore nella preselezione della piazzola:', error);
+        }
+    }
+    
+    // Funzione per caricare le categorie nel modal di modifica
+    async function loadCategoriesForEdit(props) {
+        try {
+            const response = await fetch('/api/categories');
+            const categories = await response.json();
+            
+            const categorySelect = document.getElementById('editCategorySelect');
+            if (categorySelect && categories) {
+                categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category._id;
+                    option.textContent = category.name;
+                    // Preseleziona la categoria corrente se disponibile
+                    if (props.categoryId && props.categoryId === category._id) {
+                        option.selected = true;
+                    }
+                    categorySelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Errore nel caricamento delle categorie per modifica:', error);
+        }
+    }
+    
+    // Funzione per configurare la selezione a cascata nel modal di modifica
+    function setupCascadingSelectsForEdit(event, props) {
+        const categorySelect = document.getElementById('editCategorySelect');
+        const pitchSelect = document.getElementById('editPitchSelect');
+        const startDateInput = document.getElementById('editStartDate');
+        const endDateInput = document.getElementById('editEndDate');
+        
+        // Event listener per il cambio di categoria
+        categorySelect.addEventListener('change', async function() {
+            const categoryId = this.value;
+            pitchSelect.innerHTML = '<option value="">Seleziona una piazzola</option>';
+            pitchSelect.disabled = !categoryId;
+            
+            if (categoryId) {
+                await loadAvailablePitchesForEdit(categoryId, startDateInput.value, endDateInput.value, props.pitchId, event.id);
+            }
+        });
+        
+        // Event listener per il cambio delle date
+        const updatePitchesEdit = async () => {
+            const categoryId = categorySelect.value;
+            if (categoryId) {
+                pitchSelect.innerHTML = '<option value="">Seleziona una piazzola</option>';
+                await loadAvailablePitchesForEdit(categoryId, startDateInput.value, endDateInput.value, props.pitchId, event.id);
+            }
+        };
+        
+        startDateInput.addEventListener('change', updatePitchesEdit);
+        endDateInput.addEventListener('change', updatePitchesEdit);
+        
+        // Carica le piazzole iniziali se abbiamo una categoria selezionata
+        if (categorySelect.value) {
+            loadAvailablePitchesForEdit(categorySelect.value, startDateInput.value, endDateInput.value, props.pitchId, event.id);
+        }
+    }
+    
+    // Funzione per caricare le piazzole disponibili nel modal di modifica
+    async function loadAvailablePitchesForEdit(categoryId, startDate, endDate, currentPitchId, currentBookingId) {
+        try {
+            const params = new URLSearchParams({
+                categoryId,
+                startDate: startDate || '',
+                endDate: endDate || '',
+                excludeBookingId: currentBookingId || '' // Escludi la prenotazione corrente dal controllo disponibilità
+            });
+            
+            const response = await fetch(`/api/available-pitches?${params}`);
+            const pitches = await response.json();
+            
+            const pitchSelect = document.getElementById('editPitchSelect');
+            if (pitchSelect && pitches) {
+                pitches.forEach(pitch => {
+                    const option = document.createElement('option');
+                    option.value = pitch._id;
+                    option.textContent = pitch.name;
+                    option.setAttribute('data-category', pitch.category.name);
+                    // Preseleziona la piazzola corrente
+                    if (currentPitchId && currentPitchId === pitch._id) {
+                        option.selected = true;
+                    }
+                    pitchSelect.appendChild(option);
+                });
+                
+                // Se la piazzola corrente non è nelle disponibili, aggiungila comunque
+                if (currentPitchId && !pitches.find(p => p._id === currentPitchId)) {
+                    const currentOption = document.createElement('option');
+                    currentOption.value = currentPitchId;
+                    currentOption.textContent = `${pitchSelect.getAttribute('data-current-pitch-name') || 'Piazzola Corrente'} (corrente)`;
+                    currentOption.selected = true;
+                    pitchSelect.insertBefore(currentOption, pitchSelect.firstChild.nextSibling);
+                }
+                
+                if (pitches.length === 0 && !currentPitchId) {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'Nessuna piazzola disponibile per questo periodo';
+                    option.disabled = true;
+                    pitchSelect.appendChild(option);
+                }
+                
+                pitchSelect.disabled = false;
+            }
+        } catch (error) {
+            console.error('Errore nel caricamento delle piazzole per modifica:', error);
+        }
+    }
+    function setupDateInputs() {
+        const dateInputs = document.querySelectorAll('input[name="start"], input[name="end"]');
+        
+        dateInputs.forEach(input => {
+            // Aggiungi l'event listener per la formattazione automatica
+            input.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\D/g, ''); // Rimuovi tutti i caratteri non numerici
+                
+                if (value.length >= 2) {
+                    value = value.substring(0, 2) + '/' + value.substring(2);
+                }
+                if (value.length >= 5) {
+                    value = value.substring(0, 5) + '/' + value.substring(5, 9);
+                }
+                
+                e.target.value = value;
+            });
+            
+            // Aggiungi validazione in tempo reale
+            input.addEventListener('blur', function(e) {
+                const value = e.target.value;
+                if (value && !isValidDate(value)) {
+                    e.target.classList.add('is-invalid');
+                } else {
+                    e.target.classList.remove('is-invalid');
+                }
+            });
+        });
+    }
+    
+    // Funzione per validare il formato della data DD/MM/YYYY
+    function isValidDate(dateString) {
+        const regex = /^([0-2][0-9]|(3)[0-1])\/((0)[0-9]|(1)[0-2])\/\d{4}$/;
+        if (!regex.test(dateString)) return false;
+        
+        const parts = dateString.split('/');
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        
+        const date = new Date(year, month - 1, day);
+        return date.getDate() === day && date.getMonth() === month - 1 && date.getFullYear() === year;
+    }
+    
+    // Funzione per mostrare il modal di modifica prenotazione
+    function showEditBookingModal(event, props) {
+        const startDateFormatted = props.startDateFormatted || formatISOToDDMMYYYY(event.start ? event.start.toISOString().split('T')[0] : '');
+        const endDateFormatted = props.endDateFormatted || formatISOToDDMMYYYY(event.end ? event.end.toISOString().split('T')[0] : '');
+        
+        // Determina se siamo su mobile
+        const isMobile = window.innerWidth < 768;
+        
+        const modalHtml = `
+            <div class="modal fade" id="editBookingModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog ${isMobile ? 'modal-fullscreen-sm-down' : 'modal-lg'}">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-pencil-square me-2"></i>
+                                Modifica Prenotazione
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form id="editBookingForm">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="editGuestName" class="form-label">Nome Ospite *</label>
+                                    <input type="text" class="form-control ${isMobile ? 'form-control-lg' : ''}" id="editGuestName" name="guestName" value="${props.guestName || event.title}" required>
+                                </div>
+                                <div class="${isMobile ? '' : 'row'}">
+                                    <div class="${isMobile ? 'mb-3' : 'col-md-6'}">
+                                        <div class="mb-3">
+                                            <label for="editStartDate" class="form-label">Data Inizio *</label>
+                                            <input type="date" class="form-control ${isMobile ? 'form-control-lg' : ''}" id="editStartDate" name="start" 
+                                                   value="${event.start ? event.start.toISOString().split('T')[0] : ''}" required>
+                                        </div>
+                                    </div>
+                                    <div class="${isMobile ? 'mb-3' : 'col-md-6'}">
+                                        <div class="mb-3">
+                                            <label for="editEndDate" class="form-label">Data Fine *</label>
+                                            <input type="date" class="form-control ${isMobile ? 'form-control-lg' : ''}" id="editEndDate" name="end" 
+                                                   value="${event.end ? event.end.toISOString().split('T')[0] : ''}" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="editCategorySelect" class="form-label">Categoria *</label>
+                                    <select class="form-select ${isMobile ? 'form-select-lg' : ''}" id="editCategorySelect" required>
+                                        <option value="">Seleziona una categoria</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="editPitchSelect" class="form-label">Piazzola *</label>
+                                    <select class="form-select ${isMobile ? 'form-select-lg' : ''}" id="editPitchSelect" name="pitchId" required disabled data-current-pitch-name="${props.pitchName || ''}">
+                                        <option value="">Prima seleziona una categoria</option>
+                                    </select>
+                                </div>
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    <strong>Attenzione:</strong> La modifica delle date o della piazzola potrebbe causare conflitti con altre prenotazioni.
+                                </div>
+                                <div class="${isMobile ? '' : 'row'} mt-3">
+                                    <div class="${isMobile ? 'mb-2' : 'col-md-6'}">
+                                        <small class="text-muted">
+                                            <strong>Durata attuale:</strong> ${props.duration || 'N/A'} giorni
+                                        </small>
+                                    </div>
+                                    <div class="${isMobile ? 'mb-2' : 'col-md-6'}">
+                                        <small class="text-muted">
+                                            <strong>Creato da:</strong> ${props.createdBy || 'N/A'}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer ${isMobile ? 'd-grid gap-2' : ''}">
+                                <button type="button" class="btn btn-secondary ${isMobile ? 'btn-lg' : ''}" data-bs-dismiss="modal">Annulla</button>
+                                <button type="button" class="btn btn-danger ${isMobile ? 'btn-lg' : 'me-auto'}" onclick="confirmDeleteBooking('${event.id}')">
+                                    <i class="bi bi-trash me-2"></i>Elimina
+                                </button>
+                                <button type="submit" class="btn btn-primary ${isMobile ? 'btn-lg' : ''}">
+                                    <i class="bi bi-check-lg me-2"></i>Salva Modifiche
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Rimuovi modal esistente se presente
+        const existingModal = document.getElementById('editBookingModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Aggiungi nuovo modal
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Carica le categorie e configura gli event listener per la modifica
+        loadCategoriesForEdit(props);
+        setupCascadingSelectsForEdit(event, props);
+        
+        // Mostra il modal
+        const modal = new bootstrap.Modal(document.getElementById('editBookingModal'));
+        modal.show();
+        
+        // Gestisci il submit del form
+        document.getElementById('editBookingForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await handleUpdateBooking(this, event.id, modal);
+        });
+        
+        // Rimuovi il modal dal DOM quando viene nascosto
+        document.getElementById('editBookingModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+    }
+    
+    // Funzione per gestire la creazione di una nuova prenotazione
+    async function handleCreateBooking(form, modal) {
+        // Salva il testo originale del pulsante submit
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        
+        try {
+            const formData = new FormData(form);
+            const bookingData = Object.fromEntries(formData.entries());
+            
+            // Mostra loading sul pulsante submit
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creando...';
+            submitBtn.disabled = true;
+            
+            const response = await fetch('/api/bookings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(bookingData)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                // Successo
+                showSuccessMessage('Prenotazione creata con successo!');
+                modal.hide();
+                
+                // Ricarica il calendario e aggiorna le statistiche
+                await refreshCalendar();
+                await updateDashboardStats();
+                
+            } else {
+                // Errore dal server
+                throw new Error(result.message || 'Errore nella creazione della prenotazione');
+            }
+            
+        } catch (error) {
+            console.error('Errore nella creazione della prenotazione:', error);
+            showErrorMessage(error.message || 'Errore nella creazione della prenotazione');
+            
+        } finally {
+            // Ripristina il pulsante submit
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+    }
+    
+    // Funzione per gestire l'aggiornamento di una prenotazione
+    async function handleUpdateBooking(form, bookingId, modal) {
+        // Salva il testo originale del pulsante submit
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        
+        try {
+            const formData = new FormData(form);
+            const bookingData = Object.fromEntries(formData.entries());
+            
+            // Mostra loading sul pulsante submit
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
+            submitBtn.disabled = true;
+            
+            const response = await fetch(`/api/bookings/${bookingId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(bookingData)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                // Successo
+                showSuccessMessage('Prenotazione aggiornata con successo!');
+                modal.hide();
+                
+                // Ricarica il calendario e aggiorna le statistiche
+                await refreshCalendar();
+                await updateDashboardStats();
+                
+            } else {
+                // Errore dal server
+                throw new Error(result.message || 'Errore nell\'aggiornamento della prenotazione');
+            }
+            
+        } catch (error) {
+            console.error('Errore nell\'aggiornamento della prenotazione:', error);
+            showErrorMessage(error.message || 'Errore nell\'aggiornamento della prenotazione');
+            
+        } finally {
+            // Ripristina il pulsante submit
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+    }
+    
+    // Funzione per confermare l'eliminazione di una prenotazione
+    function confirmDeleteBooking(bookingId) {
+        if (confirm('Sei sicuro di voler eliminare questa prenotazione? Questa azione non può essere annullata.')) {
+            deleteBooking(bookingId);
+        }
+    }
+    
+    // Funzione per eliminare una prenotazione
+    async function deleteBooking(bookingId) {
+        try {
+            const response = await fetch(`/api/bookings/${bookingId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                showSuccessMessage('Prenotazione eliminata con successo!');
+                
+                // Chiudi il modal se aperto
+                const modal = document.getElementById('editBookingModal');
+                if (modal) {
+                    bootstrap.Modal.getInstance(modal)?.hide();
+                }
+                
+                // Ricarica il calendario e aggiorna le statistiche
+                await refreshCalendar();
+                await updateDashboardStats();
+                
+            } else {
+                throw new Error(result.message || 'Errore nell\'eliminazione della prenotazione');
+            }
+            
+        } catch (error) {
+            console.error('Errore nell\'eliminazione della prenotazione:', error);
+            showErrorMessage(error.message || 'Errore nell\'eliminazione della prenotazione');
+        }
+    }
+    
+    // Funzione per mostrare messaggi di successo
+    function showSuccessMessage(message) {
+        const toastHtml = `
+            <div class="toast align-items-center text-white bg-success border-0 position-fixed top-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index: 9999;">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', toastHtml);
+        
+        const toastElement = document.body.lastElementChild;
+        const toast = new bootstrap.Toast(toastElement, { delay: 4000 });
+        toast.show();
+        
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
+    
+    // Funzione per aggiornare le statistiche della dashboard
+    async function updateDashboardStats() {
+        try {
+            const response = await fetch('/api/stats');
+            const stats = await response.json();
+            
+            // Aggiorna i badge delle statistiche
+            const totalPitchesEl = document.querySelector('[data-stat="total-pitches"]');
+            const totalBookingsEl = document.querySelector('[data-stat="total-bookings"]');
+            const activeBookingsEl = document.querySelector('[data-stat="active-bookings"]');
+            
+            if (totalPitchesEl) totalPitchesEl.textContent = stats.totalPitches || '0';
+            if (totalBookingsEl) totalBookingsEl.textContent = stats.totalBookings || '0';
+            if (activeBookingsEl) activeBookingsEl.textContent = stats.activeBookings || '0';
+            
+        } catch (error) {
+            console.error('Errore nell\'aggiornamento delle statistiche:', error);
+        }
+    }
+    
+    // Funzione per ricaricare i dati del calendario
+    async function refreshCalendar() {
+        if (!calendar) return;
+        
+        try {
+            const calendarData = await loadCalendarData();
+            
+            // Rimuovi tutti gli eventi esistenti
+            calendar.removeAllEvents();
+            
+            // Aggiungi i nuovi eventi
+            calendar.addEventSource(calendarData.events);
+            
+            console.log('Calendario aggiornato');
+            
+        } catch (error) {
+            console.error('Errore nell\'aggiornamento del calendario:', error);
+            showErrorMessage('Errore nell\'aggiornamento del calendario.');
+        }
+    }
+    
+    // Event listener per il pulsante refresh
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', refreshCalendar);
+    }
+    
+    // Event listener per il bottone aggiungi prenotazione (sia desktop che mobile)
+    if (addBookingBtn) {
+        addBookingBtn.addEventListener('click', function() {
+            // Controlla se l'utente è un visualizzatore - i visualizzatori non possono creare prenotazioni
+            if (window.operatorData && window.operatorData.role === 'viewer') {
+                return; // Non fare nulla se l'utente è un visualizzatore
+            }
+            
+            // Apri il modal per creare una nuova prenotazione con la data di oggi
+            const today = new Date();
+            showCreateBookingModal(today);
+        });
+    }
+    
+    // Event listener per il pulsante desktop aggiuntivo
+    const addBookingBtnDesktop = document.getElementById('addBookingBtnDesktop');
+    if (addBookingBtnDesktop) {
+        addBookingBtnDesktop.addEventListener('click', function() {
+            // Controlla se l'utente è un visualizzatore - i visualizzatori non possono creare prenotazioni
+            if (window.operatorData && window.operatorData.role === 'viewer') {
+                return; // Non fare nulla se l'utente è un visualizzatore
+            }
+            
+            const today = new Date();
+            showCreateBookingModal(today);
+        });
+    }
+    
+    // Event listener aggiuntivo per il FAB mobile (se presente)
+    const fabAddBooking = document.getElementById('fabAddBooking');
+    if (fabAddBooking) {
+        fabAddBooking.addEventListener('click', function() {
+            const today = new Date();
+            showCreateBookingModal(today);
+        });
+    }
+    
+    // Inizializza il calendario
+    initializeCalendar();
+    
+    // Esporta funzioni per uso globale se necessario
+    window.EcoGardenCalendar = {
+        refresh: refreshCalendar,
+        getCalendar: () => calendar
+    };
+});

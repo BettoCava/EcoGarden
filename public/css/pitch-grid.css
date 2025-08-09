@@ -1,0 +1,225 @@
+/* Stili per la griglia personalizzata piazzole/settimana */
+.pitch-week-grid {
+    margin-top: 20px;
+}
+
+.pitch-week-grid .table {
+    border-collapse: separate;
+    border-spacing: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pitch-week-grid .table th,
+.pitch-week-grid .table td {
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+    position: relative;
+}
+
+.pitch-header {
+    min-width: 120px;
+    background-color: #343a40 !important;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+    position: sticky;
+    left: 0;
+    z-index: 10;
+}
+
+.day-header {
+    min-width: 100px;
+    background-color: #343a40 !important;
+    color: white;
+    text-align: center;
+}
+
+.pitch-cell {
+    background-color: #f8f9fa;
+    font-weight: 500;
+    text-align: center;
+    min-width: 120px;
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    border-right: 2px solid #343a40;
+}
+
+.category-separator td {
+    background-color: #e9ecef !important;
+    border-top: 2px solid #adb5bd !important;
+    font-size: 0.75rem;
+    padding: 2px 8px !important;
+}
+
+.booking-cell {
+    height: 60px;
+    min-width: 100px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.booking-cell.occupied {
+    position: relative;
+    overflow: hidden;
+}
+
+.booking-cell.occupied:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    z-index: 20;
+}
+
+.booking-cell.available {
+    background-color: #f8f9fa;
+    border: 2px dashed #28a745;
+}
+
+.booking-cell.available:hover {
+    background-color: #e9f7ef;
+    border-color: #20c997;
+    transform: scale(1.02);
+}
+
+.booking-info {
+    padding: 4px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.guest-name {
+    font-size: 0.8rem;
+    line-height: 1.1;
+    margin-bottom: 2px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 90px;
+}
+
+.booking-dates {
+    font-size: 0.65rem;
+    opacity: 0.9;
+    line-height: 1;
+}
+
+.available-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.available-indicator i {
+    font-size: 1.2rem;
+    opacity: 0.7;
+    transition: all 0.2s ease;
+}
+
+.booking-cell.available:hover .available-indicator i {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+/* Responsività mobile */
+@media (max-width: 768px) {
+    .pitch-week-grid {
+        margin-top: 15px;
+    }
+    
+    .pitch-header,
+    .pitch-cell {
+        min-width: 80px;
+        font-size: 0.8rem;
+    }
+    
+    .day-header {
+        min-width: 60px;
+        font-size: 0.7rem;
+        padding: 5px 2px;
+    }
+    
+    .booking-cell {
+        height: 50px;
+        min-width: 60px;
+    }
+    
+    .guest-name {
+        font-size: 0.7rem;
+        max-width: 50px;
+    }
+    
+    .booking-dates {
+        font-size: 0.6rem;
+    }
+    
+    .available-indicator i {
+        font-size: 1rem;
+    }
+}
+
+/* Scrolling orizzontale su mobile */
+@media (max-width: 576px) {
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .pitch-week-grid .table {
+        min-width: 600px;
+    }
+}
+
+/* Tooltip personalizzato per le celle */
+.booking-cell[title] {
+    position: relative;
+}
+
+/* Effetti hover migliorati */
+.booking-cell.occupied::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.1);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.booking-cell.occupied:hover::before {
+    opacity: 1;
+}
+
+/* Stili per la stampa */
+@media print {
+    .pitch-week-grid .table {
+        border-collapse: collapse;
+        font-size: 0.8rem;
+    }
+    
+    .booking-cell.occupied:hover {
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .available-indicator i {
+        display: none;
+    }
+    
+    .booking-cell.available {
+        background-color: white !important;
+        border: 1px solid #ccc !important;
+    }
+    
+    .booking-cell.available::after {
+        content: 'Libero';
+        font-size: 0.6rem;
+        color: #666;
+    }
+}

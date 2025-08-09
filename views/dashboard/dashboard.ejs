@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- FullCalendar CSS (non necessario con bundle globale) -->
+  
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  
+  <!-- Responsive CSS -->
+  <link href="/css/responsive.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar-brand {
+            font-weight: 600;
+            color: #198754 !important;
+        }
+        
+        .main-container {
+            padding-top: 20px;
+            padding-bottom: 20px;
+        }
+        
+        .calendar-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        #calendar {
+            height: calc(100vh - 200px);
+            min-height: 500px;
+        }
+        
+        /* Rimuoviamo il blocco completo del calendario per i visualizzatori */
+        /* (era presente una regola .viewer-mode #calendar { pointer-events: none; }) */
+        
+        /* Migliora UX per i visualizzatori: nessuna azione su giorni/eventi ma navigazione consentita */
+        .viewer-mode .fc-daygrid-day,
+        .viewer-mode .fc-event {
+            pointer-events: none !important;
+            cursor: not-allowed !important;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .role-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .logout-btn {
+            border: none;
+            background: none;
+            color: #dc3545;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: background-color 0.15s ease-in-out;
+        }
+        
+        .logout-btn:hover {
+            background-color: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 10px;
+            }
+            
+            .calendar-container {
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+            
+            #calendar {
+                height: calc(100vh - 150px);
+                min-height: 400px;
+            }
+            
+            .navbar-brand {
+                font-size: 1.1rem;
+            }
+            
+            .user-info {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+        }
+        
+        /* FullCalendar customizations */
+        .fc-theme-standard .fc-scrollgrid {
+            border: 1px solid #dee2e6;
+        }
+        
+        .fc-theme-standard th {
+            background-color: #f8f9fa;
+            border-color: #dee2e6;
+        }
+        
+        .fc-event {
+            border-radius: 6px;
+            border: none !important;
+            padding: 3px 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .fc-event:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        
+        /* Colori per le diverse categorie di piazzole */
+        .fc-event.category-tende {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+        
+        .fc-event.category-camper {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+        }
+        
+        .fc-event.category-bungalow {
+            background: linear-gradient(135deg, #fd7e14, #e55a4f);
+            color: white;
+        }
+        
+        .fc-event.category-roulotte {
+            background: linear-gradient(135deg, #6f42c1, #e83e8c);
+            color: white;
+        }
+        
+        /* Stato prenotazione */
+        .fc-event.status-confirmed {
+            border-left: 4px solid #28a745;
+        }
+        
+        .fc-event.status-pending {
+            border-left: 4px solid #ffc107;
+            opacity: 0.8;
+        }
+        
+        .fc-event.status-cancelled {
+            background: #6c757d !important;
+            opacity: 0.6;
+            text-decoration: line-through;
+        }
+        
+        .fc-toolbar-title {
+            color: #495057;
+            font-weight: 600;
+        }
+        
+        .fc-button-primary {
+            background-color: #198754;
+            border-color: #198754;
+        }
+        
+        .fc-button-primary:hover {
+            background-color: #157347;
+            border-color: #146c43;
+        }
+        
+        .fc-button-primary:not(:disabled):active {
+            background-color: #146c43;
+            border-color: #13653f;
+        }
+        
+        /* Floating Action Button */
+        #addBookingBtn {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(25, 135, 84, 0.4);
+        }
+        
+        #addBookingBtn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(25, 135, 84, 0.6);
+        }
+        
+        #addBookingBtn:active {
+            transform: scale(0.95);
+        }
+        
+        /* Responsive adjustments for floating button */
+        @media (max-width: 768px) {
+            #addBookingBtn {
+                bottom: 20px !important;
+                right: 20px !important;
+                width: 50px !important;
+                height: 50px !important;
+            }
+            
+            #addBookingBtn i {
+                font-size: 1.2rem !important;
+            }
+        }
+    </style>
+</head>
+<body<% if (user && user.role === 'viewer') { %> class="viewer-mode"<% } %>>
+    <!-- Navigation Header -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="bi bi-tree-fill me-2"></i>EcoGarden
+            </a>
+            
+            <div class="navbar-nav ms-auto">
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="user-info">
+                            <span class="fw-medium">
+                                <i class="bi bi-person-circle me-1"></i>
+                                <% if (user) { %><%= user.username %><% } else { %>Utente<% } %>
+                            </span>
+                            <% if (user && user.role === 'admin') { %>
+                                <span class="badge bg-danger role-badge">Amministratore</span>
+                            <% } else if (user && user.role === 'operator') { %>
+                                <span class="badge bg-warning role-badge">Operatore</span>
+                            <% } else if (user && user.role === 'viewer') { %>
+                                <span class="badge bg-info role-badge">Visualizzatore</span>
+                            <% } %>
+                        </div>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                        <% if (isAdmin) { %>
+                            <li><a class="dropdown-item" href="/admin">
+                                <i class="bi bi-gear-fill me-2"></i>Pannello Admin
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                        <% } %>
+                        <li><a class="dropdown-item text-danger" href="/logout">
+                            <i class="bi bi-box-arrow-right me-2"></i>Logout
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid main-container">
+        <div class="row">
+            <div class="col-12">
+                <!-- Stats Cards (visible only on larger screens) -->
+                <div class="row mb-4 d-none d-md-flex">
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <h6 class="card-title mb-0">Piazzole Totali</h6>
+                                        <h4 class="mb-0" data-stat="total-pitches"><%= stats.totalPitches %></h4>
+                                    </div>
+                                    <div class="ms-3">
+                                        <i class="bi bi-house-fill fs-2"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <h6 class="card-title mb-0">Prenotazioni Attive</h6>
+                                        <h4 class="mb-0" data-stat="active-bookings"><%= stats.activeBookings %></h4>
+                                    </div>
+                                    <div class="ms-3">
+                                        <i class="bi bi-calendar-check-fill fs-2"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <h6 class="card-title mb-0">Totale Prenotazioni</h6>
+                                        <h4 class="mb-0" data-stat="total-bookings"><%= stats.totalBookings %></h4>
+                                    </div>
+                                    <div class="ms-3">
+                                        <i class="bi bi-calendar2-week-fill fs-2"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <h6 class="card-title mb-0">Prossimi Arrivi</h6>
+                                        <h4 class="mb-0" data-stat="upcoming-bookings"><%= stats.upcomingBookings %></h4>
+                                    </div>
+                                    <div class="ms-3">
+                                        <i class="bi bi-calendar-plus-fill fs-2"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upcoming Bookings (visible only if there are any) -->
+                <% if (upcomingBookings && upcomingBookings.length > 0) { %>
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-calendar-event me-2"></i>Prossimi Arrivi (7 giorni)
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <% upcomingBookings.forEach(booking => { %>
+                                    <div class="col-md-6 col-lg-4 mb-2">
+                                        <div class="d-flex align-items-center p-2 bg-light rounded">
+                                            <div class="flex-grow-1">
+                                                <strong><%= booking.guestName %></strong><br>
+                                                <small class="text-muted">
+                                                    <i class="bi bi-house me-1"></i><%= booking.pitch.name %><br>
+                                                    <i class="bi bi-calendar me-1"></i><%= booking.startDateFormatted %> - <%= booking.endDateFormatted %>
+                                                </small>
+                                            </div>
+                                            <div class="ms-2">
+                                                <span class="badge bg-info"><%= booking.getDuration ? booking.getDuration() + ' gg' : '' %></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <% }) %>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <% } %>
+
+                <!-- Calendar Container -->
+                <div class="calendar-container">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-calendar3 me-2"></i>Calendario Prenotazioni
+                        </h5>
+                        <div class="btn-group">
+                            <% if (user && user.role !== 'viewer') { %>
+                            <button class="btn btn-success btn-sm d-none d-md-inline-block" id="addBookingBtnDesktop">
+                                <i class="bi bi-plus-lg me-1"></i>Nuova Prenotazione
+                            </button>
+                            <% } %>
+                            <button class="btn btn-outline-primary btn-sm" id="refreshCalendar">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Aggiorna
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- FullCalendar Element -->
+                    <div id='calendar'></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Button per aggiungere prenotazione (solo per operatori e admin) -->
+    <% if (user && user.role !== 'viewer') { %>
+    <button type="button" class="btn btn-success position-fixed shadow-lg fab-mobile" id="addBookingBtn" 
+            style="bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 50%; z-index: 1050;"
+            title="Aggiungi Prenotazione">
+        <i class="bi bi-plus-lg fs-3"></i>
+    </button>
+    <% } %>
+
+    <!-- Loading Spinner (hidden by default) -->
+    <div id="loadingSpinner" class="position-fixed top-50 start-50 translate-middle d-none">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Caricamento...</span>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    
+    <!-- FullCalendar JavaScript -->
+    <script src='/node_modules/fullcalendar/index.global.min.js'></script>
+
+    <!-- Dati utente in JSON per inizializzazione sicura (prima di main.js) -->
+    <script id="operatorData" type="application/json"><%- JSON.stringify({
+        username: (user ? user.username : 'Guest'),
+        role: (user ? user.role : 'viewer'),
+        isAdmin: (typeof isAdmin !== 'undefined' && isAdmin) ? true : false
+    }) %></script>
+    <script>
+        (function() {
+            var el = document.getElementById('operatorData');
+            try {
+                window.operatorData = el ? JSON.parse(el.textContent) : { username: 'Guest', role: 'viewer', isAdmin: false };
+            } catch (e) {
+                window.operatorData = { username: 'Guest', role: 'viewer', isAdmin: false };
+            }
+        })();
+    </script>
+    
+    <!-- Custom JavaScript -->
+    <script src="/js/main.js"></script>
+
+    <!-- Inline JavaScript for initialization -->
+    <script>
+        // Inizializza tooltips Bootstrap
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    </script>
+</body>
+</html>

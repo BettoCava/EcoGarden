@@ -1,0 +1,1 @@
+This file marks the removal of the old custom pitch grid feature and its styles. The feature has been deprecated and code references have been removed from JS and templates.

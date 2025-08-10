@@ -405,7 +405,9 @@ sudo chown -R $USER:$USER /path/to/ecogarden
 
 ## 📄 Licenza
 
-Questo progetto è distribuito sotto licenza MIT. Vedi il file `LICENSE` per i dettagli.
+Al momento questo progetto non ha una licenza pubblica. Tutti i diritti sono riservati al proprietario del repository.
+
+Se desideri adottare una licenza open source in futuro, aggiungi un file `LICENSE` alla root (ad es. MIT, Apache-2.0, GPL-3.0) e aggiorna questa sezione di conseguenza.
 
 ## 🆘 Supporto
 

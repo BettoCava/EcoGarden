@@ -302,22 +302,38 @@ volumes:
   mongodb_data:
 ```
 
-#### Avviare solo MongoDB con Docker
-Se vuoi solo un'istanza MongoDB locale in container:
+### Avvio con Docker Compose (app + MongoDB)
+
+È incluso un file `docker-compose.yml` pronto all'uso.
+
+Comandi principali:
+
 ```bash
-# crea un volume persistente
-docker volume create ecogarden_mongodb
+# build e avvio in background
+docker compose up -d --build
 
-# avvia MongoDB
-docker run -d --name ecogarden-mongo \
-  -p 27017:27017 \
-  -v ecogarden_mongodb:/data/db \
-  --restart unless-stopped \
-  mongo:5
+# verificare i servizi
+docker compose ps
 
-# usa questa URI nel tuo .env
-MONGODB_URI=mongodb://localhost:27017/ecogarden
+# log (Mongo)
+docker compose logs -f mongo
+
+# log (app)
+docker compose logs -f app
+
+# eseguire seed admin-only (interattivo)
+docker compose exec app node seed-admin.js
+
+# seed admin-only con argomenti
+docker compose exec app node seed-admin.js --username admin --password admin123
+
+# spegnere i servizi
+docker compose down
 ```
+
+Nota:
+- L’app legge `MONGODB_URI` già puntata al servizio `mongo`.
+- I dati Mongo sono persistenti nel volume `mongodb_data`.
 
 ## 📖 Utilizzo
 

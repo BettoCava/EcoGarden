@@ -16,7 +16,8 @@ const operatorSchema = new mongoose.Schema({
     unique: true,
     trim: true,
     lowercase: true,
-    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Inserisci un\'email valida']
+    // Permissive email regex: any non-space before/after @, TLD length >= 2
+    match: [/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i, 'Inserisci un\'email valida']
   },
   password: {
     type: String,

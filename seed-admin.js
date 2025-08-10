@@ -41,18 +41,19 @@ async function connectDB() {
 
 async function createOrUpdateAdmin(username, password) {
   try {
+    const normalizedUsername = String(username).trim().toLowerCase();
     const hashed = await bcrypt.hash(password, 10);
 
     const update = {
-      username,
-      email: `${username}@ecogarden.local`,
+      username: normalizedUsername,
+      email: `${normalizedUsername}@ecogarden.local`,
       password: hashed,
       role: 'admin',
       isActive: true
     };
 
-    const opts = { upsert: true, new: true, setDefaultsOnInsert: true };
-    const admin = await Operator.findOneAndUpdate({ username }, update, opts);
+    const opts = { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true };
+    const admin = await Operator.findOneAndUpdate({ username: normalizedUsername }, update, opts);
 
     console.log(`✅ Admin pronto: username="${admin.username}"`);
   } catch (error) {

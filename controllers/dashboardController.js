@@ -50,6 +50,15 @@ const getCategoryColor = (categoryName) => {
   return colors[categoryName] || '#6c757d';
 };
 
+// Helper per serializzare date in YYYY-MM-DD in locale (evita shift timezone)
+const formatLocalYMD = (date) => {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 // Funzione per renderizzare la dashboard
 const renderDashboard = async (req, res) => {
   try {
@@ -146,8 +155,8 @@ const getBookingsAndPitches = async (req, res) => {
         id: booking._id.toString(),
         resourceId: booking.pitch._id.toString(),
         title: `${booking.pitch.category.name} - ${booking.pitch.name}`,
-        start: booking.startDate.toISOString().split('T')[0], // Manteniamo ISO per FullCalendar
-        end: booking.endDate.toISOString().split('T')[0],
+        start: formatLocalYMD(booking.startDate),
+        end: formatLocalYMD(booking.endDate),
         extendedProps: {
           guestName: booking.guestName,
           pitchId: booking.pitch._id.toString(),
@@ -213,8 +222,8 @@ const getBookingsByDateRange = async (req, res) => {
       id: booking._id.toString(),
       resourceId: booking.pitch._id.toString(),
       title: booking.guestName,
-      start: booking.startDate.toISOString().split('T')[0],
-      end: booking.endDate.toISOString().split('T')[0],
+      start: formatLocalYMD(booking.startDate),
+      end: formatLocalYMD(booking.endDate),
       extendedProps: {
         guestName: booking.guestName,
         pitchName: booking.pitch.name,

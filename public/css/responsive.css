@@ -300,3 +300,9 @@
         transition: none;
     }
 }
+
+/* Giorni non prenotabili (passato) */
+.eg-nonbookable {
+    opacity: 0.5;
+    pointer-events: none;
+}

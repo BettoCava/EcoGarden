@@ -193,6 +193,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 locale: 'it',
                 firstDay: 1, // Lunedì come primo giorno della settimana
                 
+                // Giorni non prenotabili (solo stile; i click sono bloccati da dateClick)
+                dayCellClassNames: (arg) => {
+                    const today = new Date(); today.setHours(0,0,0,0);
+                    const d = new Date(arg.date.getFullYear(), arg.date.getMonth(), arg.date.getDate());
+                    return d < today ? ['eg-nonbookable'] : [];
+                },
+
                 // Eventi (prenotazioni)
                 events: calendarData.events,
                 
@@ -254,6 +261,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (window.operatorData && window.operatorData.role === 'viewer') {
                         return; // Non fare nulla se l'utente è un visualizzatore
                     }
+                    // Blocca giorni nel passato
+                    const today = new Date(); today.setHours(0,0,0,0);
+                    const d = new Date(info.date.getFullYear(), info.date.getMonth(), info.date.getDate());
+                    if (d < today) return;
                     showCreateBookingModal(info.date, null);
                 }
             });
@@ -330,11 +341,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                             <div class="${isMobile ? 'mb-3' : 'row mt-2'}">
                                 <div class="${isMobile ? 'fw-bold mb-1' : 'col-sm-4'}"><strong>Check-in:</strong></div>
-                                <div class="${isMobile ? 'mb-3' : 'col-sm-8'}">${props.startDateFormatted || formatISOToDDMMYYYY(event.startStr) || (event.start ? formatISOToDDMMYYYY(event.start.toISOString().split('T')[0]) : 'N/A')}</div>
+                                <div class="${isMobile ? 'mb-3' : 'col-sm-8'}">${props.startDateFormatted || formatISOToDDMMYYYY(event.startStr) || (event.start ? formatISOToDDMMYYYY(formatDateYMDLocal(event.start)) : 'N/A')}</div>
                             </div>
                             <div class="${isMobile ? 'mb-3' : 'row mt-2'}">
                                 <div class="${isMobile ? 'fw-bold mb-1' : 'col-sm-4'}"><strong>Check-out:</strong></div>
-                                <div class="${isMobile ? 'mb-3' : 'col-sm-8'}">${props.endDateFormatted || formatISOToDDMMYYYY(event.endStr) || (event.end ? formatISOToDDMMYYYY(event.end.toISOString().split('T')[0]) : 'N/A')}</div>
+                                <div class="${isMobile ? 'mb-3' : 'col-sm-8'}">${props.endDateFormatted || formatISOToDDMMYYYY(event.endStr) || (event.end ? formatISOToDDMMYYYY(formatDateYMDLocal(event.end)) : 'N/A')}</div>
                             </div>
                             <div class="${isMobile ? 'mb-3' : 'row mt-2'}">
                                 <div class="${isMobile ? 'fw-bold mb-1' : 'col-sm-4'}"><strong>Durata:</strong></div>
@@ -377,10 +388,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Funzione per mostrare il modal di creazione prenotazione
     function showCreateBookingModal(selectedDate, selectedPitchId) {
-        const formattedDate = formatDateToInput(selectedDate);
-        const tomorrowDate = new Date(selectedDate);
-        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-        const formattedEndDate = formatDateToInput(tomorrowDate);
+    const formattedDate = formatDateToInput(selectedDate);
+    const tomorrowDate = new Date(selectedDate);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const formattedEndDate = formatDateToInput(tomorrowDate);
         
         // Determina se siamo su mobile
         const isMobile = window.innerWidth < 768;
@@ -472,6 +483,37 @@ document.addEventListener('DOMContentLoaded', function() {
         const modal = new bootstrap.Modal(document.getElementById('createBookingModal'));
         modal.show();
         
+        // Durata live preview per il modal di creazione
+        (function setupCreateDurationPreview() {
+            const startInput = document.getElementById('createStartDate');
+            const endInput = document.getElementById('createEndDate');
+            if (!startInput || !endInput) return;
+            const update = () => {
+                const s = startInput.value; const e = endInput.value;
+                if (!s || !e) return;
+                const sd = new Date(s+"T00:00:00");
+                const ed = new Date(e+"T00:00:00");
+                const days = Math.ceil((ed - sd) / (1000*60*60*24));
+                const container = endInput.closest('.mb-3');
+                let hint = container && container.querySelector('[data-duration-preview]');
+                if (!hint && container) {
+                    hint = document.createElement('div');
+                    hint.className = 'text-muted mt-1';
+                    hint.setAttribute('data-duration-preview','');
+                    container.appendChild(hint);
+                }
+                if (!isNaN(days)) {
+                    hint.textContent = `Durata nuova: ${days} giorni`;
+                } else {
+                    hint.textContent = '';
+                }
+            };
+            startInput.addEventListener('change', update);
+            endInput.addEventListener('change', update);
+            // iniziale
+            update();
+        })();
+
         // Gestisci il submit del form
         document.getElementById('createBookingForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -633,38 +675,44 @@ document.addEventListener('DOMContentLoaded', function() {
         const pitchSelect = document.getElementById('editPitchSelect');
         const startDateInput = document.getElementById('editStartDate');
         const endDateInput = document.getElementById('editEndDate');
-        
-        // Event listener per il cambio di categoria
+        const originalCategoryId = props.categoryId || '';
+        const originalPitchId = props.pitchId || '';
+
+        // Cambio categoria: se diversa dall'originale, non forzare la piazzola corrente
         categorySelect.addEventListener('change', async function() {
             const categoryId = this.value;
             pitchSelect.innerHTML = '<option value="">Seleziona una piazzola</option>';
             pitchSelect.disabled = !categoryId;
-            
+
             if (categoryId) {
-                await loadAvailablePitchesForEdit(categoryId, startDateInput.value, endDateInput.value, props.pitchId, event.id);
+                const includeCurrent = categoryId === originalCategoryId;
+                const selectedToKeep = includeCurrent ? originalPitchId : '';
+                await loadAvailablePitchesForEdit(categoryId, startDateInput.value, endDateInput.value, selectedToKeep, event.id, includeCurrent);
             }
         });
-        
-        // Event listener per il cambio delle date
+
+        // Cambio date: mantieni la selezione corrente, includi la corrente solo nella categoria originale
         const updatePitchesEdit = async () => {
             const categoryId = categorySelect.value;
             if (categoryId) {
+                const currentSelected = pitchSelect.value || originalPitchId;
+                const includeCurrent = categoryId === originalCategoryId;
                 pitchSelect.innerHTML = '<option value="">Seleziona una piazzola</option>';
-                await loadAvailablePitchesForEdit(categoryId, startDateInput.value, endDateInput.value, props.pitchId, event.id);
+                await loadAvailablePitchesForEdit(categoryId, startDateInput.value, endDateInput.value, currentSelected, event.id, includeCurrent);
             }
         };
-        
+
         startDateInput.addEventListener('change', updatePitchesEdit);
         endDateInput.addEventListener('change', updatePitchesEdit);
-        
-        // Carica le piazzole iniziali se abbiamo una categoria selezionata
+
+        // Iniziale: carica piazzole della categoria corrente e seleziona la piazzola attuale
         if (categorySelect.value) {
-            loadAvailablePitchesForEdit(categorySelect.value, startDateInput.value, endDateInput.value, props.pitchId, event.id);
+            loadAvailablePitchesForEdit(categorySelect.value, startDateInput.value, endDateInput.value, originalPitchId, event.id, true);
         }
     }
     
     // Funzione per caricare le piazzole disponibili nel modal di modifica
-    async function loadAvailablePitchesForEdit(categoryId, startDate, endDate, currentPitchId, currentBookingId) {
+    async function loadAvailablePitchesForEdit(categoryId, startDate, endDate, selectedPitchId, currentBookingId, includeCurrentIfUnavailable) {
         try {
             const params = new URLSearchParams({
                 categoryId,
@@ -683,23 +731,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     option.value = pitch._id;
                     option.textContent = pitch.name;
                     option.setAttribute('data-category', pitch.category.name);
-                    // Preseleziona la piazzola corrente
-                    if (currentPitchId && currentPitchId === pitch._id) {
+                    // Preseleziona se coincide con quella richiesta
+                    if (selectedPitchId && selectedPitchId === pitch._id) {
                         option.selected = true;
                     }
                     pitchSelect.appendChild(option);
                 });
                 
-                // Se la piazzola corrente non è nelle disponibili, aggiungila comunque
-                if (currentPitchId && !pitches.find(p => p._id === currentPitchId)) {
+                // Se la piazzola selezionata non è nelle disponibili, aggiungila comunque solo se restiamo nella categoria originale
+                if (includeCurrentIfUnavailable && selectedPitchId && !pitches.find(p => p._id === selectedPitchId)) {
                     const currentOption = document.createElement('option');
-                    currentOption.value = currentPitchId;
+                    currentOption.value = selectedPitchId;
                     currentOption.textContent = `${pitchSelect.getAttribute('data-current-pitch-name') || 'Piazzola Corrente'} (corrente)`;
                     currentOption.selected = true;
                     pitchSelect.insertBefore(currentOption, pitchSelect.firstChild.nextSibling);
                 }
                 
-                if (pitches.length === 0 && !currentPitchId) {
+                if (pitches.length === 0 && !selectedPitchId) {
                     const option = document.createElement('option');
                     option.value = '';
                     option.textContent = 'Nessuna piazzola disponibile per questo periodo';
@@ -759,8 +807,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Funzione per mostrare il modal di modifica prenotazione
     function showEditBookingModal(event, props) {
-        const startDateFormatted = props.startDateFormatted || formatISOToDDMMYYYY(event.start ? event.start.toISOString().split('T')[0] : '');
-        const endDateFormatted = props.endDateFormatted || formatISOToDDMMYYYY(event.end ? event.end.toISOString().split('T')[0] : '');
+    const startDateFormatted = props.startDateFormatted || formatISOToDDMMYYYY(event.startStr || (event.start ? formatDateYMDLocal(event.start) : ''));
+    const endDateFormatted = props.endDateFormatted || formatISOToDDMMYYYY(event.endStr || (event.end ? formatDateYMDLocal(event.end) : ''));
         
         // Determina se siamo su mobile
         const isMobile = window.innerWidth < 768;
@@ -786,15 +834,15 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <div class="${isMobile ? 'mb-3' : 'col-md-6'}">
                                         <div class="mb-3">
                                             <label for="editStartDate" class="form-label">Data Inizio *</label>
-                                            <input type="date" class="form-control ${isMobile ? 'form-control-lg' : ''}" id="editStartDate" name="start" 
-                                                   value="${event.start ? event.start.toISOString().split('T')[0] : ''}" required>
+                          <input type="date" class="form-control ${isMobile ? 'form-control-lg' : ''}" id="editStartDate" name="start" 
+                              value="${event.startStr || (event.start ? formatDateYMDLocal(event.start) : '')}" required>
                                         </div>
                                     </div>
                                     <div class="${isMobile ? 'mb-3' : 'col-md-6'}">
                                         <div class="mb-3">
                                             <label for="editEndDate" class="form-label">Data Fine *</label>
-                                            <input type="date" class="form-control ${isMobile ? 'form-control-lg' : ''}" id="editEndDate" name="end" 
-                                                   value="${event.end ? event.end.toISOString().split('T')[0] : ''}" required>
+                          <input type="date" class="form-control ${isMobile ? 'form-control-lg' : ''}" id="editEndDate" name="end" 
+                              value="${event.endStr || (event.end ? formatDateYMDLocal(event.end) : '')}" required>
                                         </div>
                                     </div>
                                 </div>
@@ -807,7 +855,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <div class="mb-3">
                                     <label for="editPitchSelect" class="form-label">Piazzola *</label>
                                     <select class="form-select ${isMobile ? 'form-select-lg' : ''}" id="editPitchSelect" name="pitchId" required disabled data-current-pitch-name="${props.pitchName || ''}">
-                                        <option value="">Prima seleziona una categoria</option>
+                                        <option value="" disabled selected>Seleziona una piazzola</option>
                                     </select>
                                 </div>
                                 <div class="alert alert-warning">
@@ -852,13 +900,60 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         
         // Carica le categorie e configura gli event listener per la modifica
-        loadCategoriesForEdit(props);
-        setupCascadingSelectsForEdit(event, props);
+        (async () => {
+            await loadCategoriesForEdit(props);
+            setupCascadingSelectsForEdit(event, props);
+            // Abilita subito la select piazzola e popola secondo categoria corrente
+            const editPitchSelectEl = document.getElementById('editPitchSelect');
+            editPitchSelectEl.disabled = false;
+            const editCategorySelectEl = document.getElementById('editCategorySelect');
+            if (editCategorySelectEl && editCategorySelectEl.value) {
+                await loadAvailablePitchesForEdit(
+                    editCategorySelectEl.value,
+                    document.getElementById('editStartDate').value,
+                    document.getElementById('editEndDate').value,
+                    props.pitchId || '',
+                    event.id,
+                    true
+                );
+            }
+        })();
         
         // Mostra il modal
         const modal = new bootstrap.Modal(document.getElementById('editBookingModal'));
         modal.show();
         
+        // Durata live preview per il modal di modifica
+        (function setupEditDurationPreview() {
+            const startInput = document.getElementById('editStartDate');
+            const endInput = document.getElementById('editEndDate');
+            if (!startInput || !endInput) return;
+            const update = () => {
+                const s = startInput.value; const e = endInput.value;
+                if (!s || !e) return;
+                const sd = new Date(s+"T00:00:00");
+                const ed = new Date(e+"T00:00:00");
+                const days = Math.ceil((ed - sd) / (1000*60*60*24));
+                const container = endInput.closest('.mb-3');
+                let hint = container && container.querySelector('[data-duration-preview]');
+                if (!hint && container) {
+                    hint = document.createElement('div');
+                    hint.className = 'text-muted mt-1';
+                    hint.setAttribute('data-duration-preview','');
+                    container.appendChild(hint);
+                }
+                if (!isNaN(days)) {
+                    hint.textContent = `Durata nuova: ${days} giorni`;
+                } else if (hint) {
+                    hint.textContent = '';
+                }
+            };
+            startInput.addEventListener('change', update);
+            endInput.addEventListener('change', update);
+            // iniziale
+            update();
+        })();
+
         // Gestisci il submit del form
         document.getElementById('editBookingForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -875,7 +970,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function handleCreateBooking(form, modal) {
         // Salva il testo originale del pulsante submit
         const submitBtn = form.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
+        const originalText = submitBtn ? submitBtn.innerHTML : '';
         
         try {
             const formData = new FormData(form);
@@ -1002,7 +1097,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Chiudi il modal se aperto
                 const modal = document.getElementById('editBookingModal');
                 if (modal) {
-                    bootstrap.Modal.getInstance(modal)?.hide();
+                    const instance = bootstrap.Modal.getInstance(modal);
+                    if (instance) instance.hide();
                 }
                 
                 // Ricarica il calendario e aggiorna le statistiche
@@ -1140,3 +1236,13 @@ document.addEventListener('DOMContentLoaded', function() {
         getCalendar: () => calendar
     };
 });
+
+// Utilità globali fuori dal DOMContentLoaded
+function formatDateYMDLocal(date) {
+    if (!date) return '';
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}

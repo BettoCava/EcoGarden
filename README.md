@@ -450,3 +450,31 @@ Per supporto o domande:
 ---
 
 **EcoGarden** - Sistema di Gestione Camping Moderno e Responsive 🏕️
+
+## Deploy automatico da GitHub (immagine Docker + auto-update)
+
+Per evitare rebuild manuali e non perdere il database:
+
+1) Build & push automatico su ogni push su `main`:
+- È incluso il workflow GitHub Actions `.github/workflows/docker-publish.yml` che pubblica l’immagine su GHCR `ghcr.io/<owner>/<repo>:latest`.
+
+2) docker-compose con auto-update:
+- In `docker-compose.yml` il servizio `app` usa l’immagine `ghcr.io/bettocava/ecogarden:latest` e abilita Watchtower.
+- Il servizio `watchtower` aggiorna automaticamente l’app quando esce una nuova immagine (`WATCHTOWER_POLL_INTERVAL=300`). Il database Mongo è persistente nel volume `mongodb_data`, quindi gli aggiornamenti non cancellano i dati.
+
+Comandi:
+
+```bash
+# avvio stack con auto-update e DB persistente
+docker compose up -d
+
+# forzare pull manuale (opzionale)
+docker compose pull app && docker compose up -d app
+
+# vedere i log di watchtower
+docker compose logs -f watchtower
+```
+
+Note:
+- Assicurati che il repository sia pubblico o che il tuo host abbia accesso a GHCR (login `docker login ghcr.io`).
+- Puoi cambiare il tag da `latest` a un tag per commit/branch se vuoi deploy controllati.

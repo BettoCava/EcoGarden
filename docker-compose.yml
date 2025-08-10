@@ -1,6 +1,6 @@
-version: "3.8"
 services:
   app:
+    image: ghcr.io/bettocava/ecogarden:latest
     build: .
     ports:
       - "3000:3000"
@@ -8,6 +8,8 @@ services:
       - MONGODB_URI=mongodb://mongo:27017/ecogarden
       - SESSION_SECRET=your-secret-key
       - NODE_ENV=production
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     depends_on:
       mongo:
         condition: service_healthy
@@ -26,6 +28,17 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_LABEL_ENABLE=true
+    # opzionale: limitare ai soli servizi con label abilitata
+    command: --cleanup
 
 volumes:
   mongodb_data:

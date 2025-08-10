@@ -1019,6 +1019,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Rendi disponibili globalmente le funzioni di eliminazione per gli handler inline del modal
+    window.confirmDeleteBooking = confirmDeleteBooking;
+    window.deleteBooking = deleteBooking;
+
     // Funzione per mostrare messaggi di successo
     function showSuccessMessage(message) {
         const toastHtml = `

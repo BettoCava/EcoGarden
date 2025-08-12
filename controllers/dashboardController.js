@@ -626,6 +626,87 @@ const getAvailablePitches = async (req, res) => {
   }
 };
 
+// Endpoint: lista piazzole con giorni rimanenti liberi a partire da una data
+const getDailyPitchAvailability = async (req, res) => {
+  try {
+    const { date } = req.query; // YYYY-MM-DD
+    if (!date) {
+      return res.status(400).json({ error: true, message: 'Data richiesta (date=YYYY-MM-DD)' });
+    }
+    const base = new Date(date + 'T00:00:00'); // mezzanotte locale del giorno richiesto
+    const ONE_DAY = 1000*60*60*24;
+    const baseNext = new Date(base.getTime() + ONE_DAY); // giorno successivo (range half-open [base, baseNext))
+    // Carica tutte le piazzole
+    const pitches = await Pitch.find().populate('category', 'name').sort({ name: 1 });
+    const pitchIds = pitches.map(p => p._id);
+    // Unica query: tutte le prenotazioni che non sono terminate prima del giorno (endDate > base)
+    const futureBookings = await Booking.find({
+      pitch: { $in: pitchIds },
+      endDate: { $gt: base } // esclude solo prenotazioni completamente concluse prima del giorno
+  }).select('pitch startDate endDate').sort({ startDate: 1 });
+
+    // Raggruppa per piazzola
+    const byPitch = new Map();
+    futureBookings.forEach(b => {
+      const k = b.pitch && b.pitch._id ? b.pitch._id.toString() : b.pitch.toString();
+      if (!byPitch.has(k)) byPitch.set(k, []);
+      byPitch.get(k).push(b);
+    });
+    const todayMid = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+
+    const debugMode = req.query.debug === '1' || req.query.debug === 'true';
+    const result = pitches.map(p => {
+  const list = byPitch.get(p._id.toString()) || [];
+      // Ordina ulteriormente per sicurezza
+      list.sort((a,b)=>a.startDate - b.startDate);
+      // Occupato se esiste prenotazione che interseca l'intervallo [base, baseNext): start < baseNext && end > base
+      let occupied = false;
+      let nextStart = null;
+      for (const b of list) {
+        const bs = b.startDate;
+        const be = b.endDate;
+        if (bs < baseNext && be > base) { // overlap half-open
+          // Se la prenotazione inizia dopo il base ma comunque interseca (caso stesso giorno check-in) è occupata.
+          occupied = true;
+          break;
+        }
+        if (bs >= baseNext) { // candidato come prossima prenotazione successiva al giorno
+          nextStart = bs;
+          break; // primo futuro sufficiente
+        }
+      }
+      if (occupied) return null;
+      let daysFree = null;
+      let nextBookingStartStr = null;
+      if (nextStart) {
+        const diff = Math.round((nextStart - base)/ONE_DAY); // diff >=1
+        // Politica: diff = numero di giorni disponibili includendo il giorno corrente fino al giorno prima di nextStart
+        // Se cambi volessi escludere oggi basterebbe diff-1 (ma non negativo).
+        daysFree = diff;
+        nextBookingStartStr = nextStart.toISOString().split('T')[0];
+      }
+      const payload = {
+        _id: p._id,
+        name: p.name,
+        category: p.category ? { _id: p.category._id, name: p.category.name } : null,
+        daysFree
+      };
+      if (debugMode) {
+        payload.debug = {
+          bookings: list.map(b=>({s:b.startDate, e:b.endDate})),
+          nextBookingStart: nextBookingStartStr
+        };
+      }
+      return payload;
+    }).filter(Boolean);
+
+    res.json(result);
+  } catch (error) {
+    console.error('Errore nel calcolo disponibilità giornaliera:', error);
+    res.status(500).json({ error: true, message: 'Errore interno nel calcolo disponibilità' });
+  }
+};
+
 // Funzione per ottenere tutte le piazzole
 const getPitches = async (req, res) => {
   try {
@@ -661,6 +742,7 @@ module.exports = {
   deleteBooking,
   getCategories,
   getAvailablePitches,
+  getDailyPitchAvailability,
   getPitches,
   getPitchById
 };

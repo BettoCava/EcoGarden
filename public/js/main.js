@@ -265,7 +265,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     const today = new Date(); today.setHours(0,0,0,0);
                     const d = new Date(info.date.getFullYear(), info.date.getMonth(), info.date.getDate());
                     if (d < today) return;
-                    showCreateBookingModal(info.date, null);
+                    // Prima mostra una lista disponibilità dettagliata
+                    showDayAvailabilityModal(d, () => showCreateBookingModal(info.date, null));
                 }
             });
             
@@ -387,6 +388,88 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Funzione per mostrare il modal di creazione prenotazione
+        function showDayAvailabilityModal(dateObj, onCreate) {
+                const y = dateObj.getFullYear();
+                const m = String(dateObj.getMonth()+1).padStart(2,'0');
+                const d = String(dateObj.getDate()).padStart(2,'0');
+                const dateStr = `${y}-${m}-${d}`;
+
+                const existing = document.getElementById('dayAvailabilityModal');
+                if (existing) existing.remove();
+
+                const modalHtml = `
+                <div class="modal fade" id="dayAvailabilityModal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title"><i class="bi bi-list-check me-2"></i>Disponibilità ${d}/${m}/${y}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="text-center my-3" data-loading-area>
+                                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+                                </div>
+                                <div class="list-group d-none" data-result-list></div>
+                                <div class="alert alert-info mt-3 d-none" data-no-data>Nessuna piazzola trovata.</div>
+                                <small class="text-muted d-block mt-2">Le piazzole con "∞" non hanno prenotazioni imminenti.</small>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                                <button type="button" class="btn btn-success" data-action-create disabled><i class="bi bi-plus-lg me-2"></i>Nuova Prenotazione</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                const modalEl = document.getElementById('dayAvailabilityModal');
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+
+                const btnCreate = modalEl.querySelector('[data-action-create]');
+                btnCreate.addEventListener('click', () => {
+                        modal.hide();
+                        if (onCreate) onCreate();
+                });
+
+                // Abilita il bottone nuova prenotazione dopo il caricamento
+                fetch(`/api/daily-availability?date=${dateStr}`)
+                    .then(r => r.json())
+                    .then(data => {
+                         const loadingArea = modalEl.querySelector('[data-loading-area]');
+                         const list = modalEl.querySelector('[data-result-list]');
+                         const noData = modalEl.querySelector('[data-no-data]');
+                         loadingArea.classList.add('d-none');
+                         if (!Array.isArray(data) || data.length === 0) {
+                                noData.classList.remove('d-none');
+                         } else {
+                                list.classList.remove('d-none');
+                                data.forEach(p => {
+                                   // (Safety) se per qualche motivo arriva occupata (0) la saltiamo
+                                   if (p.daysFree === 0) return;
+                                   const days = p.daysFree === null ? '∞' : `${p.daysFree}g`;
+                                   const badgeClass = (p.daysFree === null || p.daysFree > 7) ? 'bg-success' : 'bg-warning text-dark';
+                                     const item = document.createElement('button');
+                                     item.type = 'button';
+                                     item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                                     item.innerHTML = `<span><strong>${p.name}</strong> <small class="text-muted">${p.category ? p.category.name : ''}</small></span><span class="badge ${badgeClass}">${days}</span>`;
+                                     item.addEventListener('click', () => {
+                                       modal.hide();
+                                       showCreateBookingModal(dateObj, p._id);
+                                     });
+                                     list.appendChild(item);
+                                });
+                         }
+                         btnCreate.disabled = false;
+                    })
+                    .catch(err => {
+                         console.error('Errore daily availability', err);
+                         const loadingArea = modalEl.querySelector('[data-loading-area]');
+                         loadingArea.innerHTML = '<div class="text-danger">Errore nel caricamento disponibilità</div>';
+                    });
+
+                modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove());
+        }
     function showCreateBookingModal(selectedDate, selectedPitchId) {
     const formattedDate = formatDateToInput(selectedDate);
     const tomorrowDate = new Date(selectedDate);

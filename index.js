@@ -19,6 +19,7 @@ const {
   deleteBooking,
   getCategories,
   getAvailablePitches,
+  getDailyPitchAvailability,
   getPitches,
   getPitchById
 } = require('./controllers/dashboardController');
@@ -98,6 +99,7 @@ app.get('/dashboard', authMiddleware.requireAuth, renderDashboard);
 app.get('/api/data', authMiddleware.requireAuth, getBookingsAndPitches);
 app.get('/api/categories', authMiddleware.requireAuth, getCategories);
 app.get('/api/available-pitches', authMiddleware.requireAuth, getAvailablePitches);
+app.get('/api/daily-availability', authMiddleware.requireAuth, getDailyPitchAvailability);
 app.get('/api/pitches', authMiddleware.requireAuth, getPitches);
 app.get('/api/pitches/:id', authMiddleware.requireAuth, getPitchById);
 app.get('/api/bookings/range', authMiddleware.requireAuth, getBookingsByDateRange);

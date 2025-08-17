@@ -180,8 +180,8 @@ const getBookingsAndPitches = async (req, res) => {
 
     const resources = pitches.map(pitch => ({
       id: pitch._id.toString(),
-      title: `${pitch.name} (${pitch.category.name})`,
-      categoryName: pitch.category.name
+      title: `${pitch.name} (${(pitch.category && pitch.category.name) || 'N/A'})`,
+      categoryName: (pitch.category && pitch.category.name) || 'N/A'
     }));
 
     // Recupera tutte le prenotazioni e formattale per FullCalendar
@@ -201,42 +201,50 @@ const getBookingsAndPitches = async (req, res) => {
     const pitchShadeMap = buildPitchShadeMap(pitches);
 
     // Formatta gli eventi per FullCalendar con sfumature per categoria
-  const events = bookings.map((booking) => {
-      const startFormatted = formatDateToDDMMYYYY(booking.startDate);
-      const endFormatted = formatDateToDDMMYYYY(booking.endDate);
-      
-      // Colore dalla sfumatura della categoria della piazzola
-  const eventColor = pitchShadeMap.get(booking.pitch._id.toString()) || getCategoryColor(booking.pitch.category.name);
-  const eventTextColor = getReadableTextColor(eventColor);
-      
-      return {
-        id: booking._id.toString(),
-        resourceId: booking.pitch._id.toString(),
-        title: `${booking.pitch.category.name} - ${booking.pitch.name}`,
-        start: formatLocalYMD(booking.startDate),
-        end: formatLocalYMD(booking.endDate),
-        extendedProps: {
-          guestName: booking.guestName,
-          pitchId: booking.pitch._id.toString(),
-          pitchName: booking.pitch.name,
-          categoryId: booking.pitch.category._id.toString(),
-          categoryName: booking.pitch.category.name,
-          createdBy: booking.createdBy.username,
-          createdByRole: booking.createdBy.role,
-          duration: booking.getDuration(),
-          createdAt: booking.createdAt,
-          updatedAt: booking.updatedAt,
-          startDateFormatted: startFormatted,
-          endDateFormatted: endFormatted,
-          checkedIn: booking.checkedIn,
-          checkedOut: booking.checkedOut
-        },
-        className: `pitch-${booking.pitch._id.toString()}`,
-        backgroundColor: eventColor,
-  borderColor: eventColor,
-  textColor: eventTextColor
-      };
-  });
+  const events = bookings
+      .map((booking) => {
+        // Salta prenotazioni con riferimento piazzola mancante (p.es. piazzola eliminata)
+        if (!booking.pitch || !booking.pitch._id) return null;
+
+        const startFormatted = formatDateToDDMMYYYY(booking.startDate);
+        const endFormatted = formatDateToDDMMYYYY(booking.endDate);
+
+        const category = booking.pitch.category || {};
+        // Colore dalla sfumatura della categoria della piazzola
+        const eventColor = pitchShadeMap.get(booking.pitch._id.toString()) || getCategoryColor(category.name || '');
+        const eventTextColor = getReadableTextColor(eventColor);
+
+        const createdBy = booking.createdBy || {};
+
+        return {
+          id: booking._id.toString(),
+          resourceId: booking.pitch._id.toString(),
+          title: `${(category.name || 'Categoria')} - ${booking.pitch.name || 'Piazzola'}`,
+          start: formatLocalYMD(booking.startDate),
+          end: formatLocalYMD(booking.endDate),
+          extendedProps: {
+            guestName: booking.guestName,
+            pitchId: booking.pitch._id.toString(),
+            pitchName: booking.pitch.name,
+            categoryId: category._id ? category._id.toString() : undefined,
+            categoryName: category.name || 'N/A',
+            createdBy: createdBy.username || 'N/A',
+            createdByRole: createdBy.role || undefined,
+            duration: typeof booking.getDuration === 'function' ? booking.getDuration() : undefined,
+            createdAt: booking.createdAt,
+            updatedAt: booking.updatedAt,
+            startDateFormatted: startFormatted,
+            endDateFormatted: endFormatted,
+            checkedIn: booking.checkedIn === true,
+            checkedOut: booking.checkedOut === true
+          },
+          className: `pitch-${booking.pitch._id.toString()}`,
+          backgroundColor: eventColor,
+          borderColor: eventColor,
+          textColor: eventTextColor
+        };
+      })
+      .filter(Boolean);
   // Risposta in formato JSON per FullCalendar
     res.json({
       resources,
@@ -287,28 +295,33 @@ const getBookingsByDateRange = async (req, res) => {
     const allPitches = await Pitch.find().populate('category', 'name').sort({ name: 1 });
     const shadeMap = buildPitchShadeMap(allPitches);
 
-    const events = bookings.map(booking => {
-      const bg = shadeMap.get(booking.pitch._id.toString()) || getCategoryColor(booking.pitch.category.name);
-      const fg = getReadableTextColor(bg);
-      return {
-        id: booking._id.toString(),
-        resourceId: booking.pitch._id.toString(),
-        title: booking.guestName,
-        start: formatLocalYMD(booking.startDate),
-        end: formatLocalYMD(booking.endDate),
-        extendedProps: {
-          guestName: booking.guestName,
-          pitchName: booking.pitch.name,
-          createdBy: booking.createdBy.username,
-          duration: booking.getDuration(),
-          checkedIn: booking.checkedIn,
-          checkedOut: booking.checkedOut
-        },
-        backgroundColor: bg,
-        borderColor: bg,
-        textColor: fg
-      };
-    });
+    const events = bookings
+      .map(booking => {
+        if (!booking.pitch || !booking.pitch._id) return null;
+        const category = booking.pitch.category || {};
+        const bg = shadeMap.get(booking.pitch._id.toString()) || getCategoryColor(category.name || '');
+        const fg = getReadableTextColor(bg);
+        const createdBy = booking.createdBy || {};
+        return {
+          id: booking._id.toString(),
+          resourceId: booking.pitch._id.toString(),
+          title: booking.guestName || `${booking.pitch.name}`,
+          start: formatLocalYMD(booking.startDate),
+          end: formatLocalYMD(booking.endDate),
+          extendedProps: {
+            guestName: booking.guestName,
+            pitchName: booking.pitch.name,
+            createdBy: createdBy.username || 'N/A',
+            duration: typeof booking.getDuration === 'function' ? booking.getDuration() : undefined,
+            checkedIn: booking.checkedIn === true,
+            checkedOut: booking.checkedOut === true
+          },
+          backgroundColor: bg,
+          borderColor: bg,
+          textColor: fg
+        };
+      })
+      .filter(Boolean);
 
     res.json({ events });
 

@@ -30,7 +30,7 @@ const renderAdminPage = async (req, res) => {
 // Funzione per creare una nuova categoria
 const createCategory = async (req, res) => {
   try {
-    const { name } = req.body;
+  const { name, color } = req.body;
 
     // Validazione dei dati di input
     if (!name || name.trim().length === 0) {
@@ -45,7 +45,8 @@ const createCategory = async (req, res) => {
 
     // Crea la nuova categoria
     const newCategory = new Category({
-      name: name.trim()
+      name: name.trim(),
+      color: color && color.trim() !== '' ? color : null
     });
 
     await newCategory.save();

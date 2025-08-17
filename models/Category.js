@@ -9,6 +9,18 @@ const categorySchema = new mongoose.Schema({
     trim: true,
     minlength: [2, 'Il nome della categoria deve avere almeno 2 caratteri'],
     maxlength: [50, 'Il nome della categoria non può superare i 50 caratteri']
+  },
+  // Colore base della categoria (HEX, es. #28a745). Se non impostato, verrà usato un default.
+  color: {
+    type: String,
+    default: null,
+    validate: {
+      validator: function(v) {
+        if (v === null || v === undefined || v === '') return true;
+        return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v);
+      },
+      message: 'Il colore deve essere in formato HEX (es. #RRGGBB o #RGB)'
+    }
   }
 }, {
   timestamps: true // Aggiunge automaticamente createdAt e updatedAt

@@ -18,6 +18,7 @@ const {
   updateBooking,
   deleteBooking,
   getCategories,
+  updateCategoryColor,
   getAvailablePitches,
   getDailyPitchAvailability,
   getPitches,
@@ -101,6 +102,8 @@ app.use(authMiddleware.addPermissionsToLocals);
 app.get('/dashboard', authMiddleware.requireAuth, renderDashboard);
 app.get('/api/data', authMiddleware.requireAuth, getBookingsAndPitches);
 app.get('/api/categories', authMiddleware.requireAuth, getCategories);
+// Aggiorna il colore di una categoria (solo admin)
+app.put('/api/categories/:id/color', authMiddleware.requireAdmin, updateCategoryColor);
 app.get('/api/available-pitches', authMiddleware.requireAuth, getAvailablePitches);
 app.get('/api/daily-availability', authMiddleware.requireAuth, getDailyPitchAvailability);
 app.get('/api/pitches', authMiddleware.requireAuth, getPitches);

@@ -40,14 +40,30 @@ const formatDateToDDMMYYYY = (date) => {
 };
 
 // Funzione helper per ottenere il colore in base alla categoria
-const getCategoryColor = (categoryName) => {
-  const colors = {
-    'Tende': '#28a745',
-    'Camper': '#007bff', 
-    'Bungalow': '#fd7e14',
-    'Roulotte': '#6f42c1'
-  };
-  return colors[categoryName] || '#6c757d';
+// Se disponibile, usiamo il colore della categoria dal DB; altrimenti fallback per nome
+const getCategoryColor = (category) => {
+  if (category && typeof category === 'object') {
+    if (category.color) return category.color;
+    if (category.name) {
+      const colors = {
+        'Tende': '#28a745',
+        'Camper': '#007bff',
+        'Bungalow': '#fd7e14',
+        'Roulotte': '#6f42c1'
+      };
+      return colors[category.name] || '#6c757d';
+    }
+  }
+  if (typeof category === 'string') {
+    const colors = {
+      'Tende': '#28a745',
+      'Camper': '#007bff',
+      'Bungalow': '#fd7e14',
+      'Roulotte': '#6f42c1'
+    };
+    return colors[category] || '#6c757d';
+  }
+  return '#6c757d';
 };
 
 // Utils colori: conversione e generazione sfumature per categoria
@@ -84,14 +100,15 @@ function generateShades(baseHex, count) {
 function buildPitchShadeMap(pitches) {
   const byCat = new Map();
   pitches.forEach(p => {
-    const cat = p.category && p.category.name ? p.category.name : 'Altro';
-    if (!byCat.has(cat)) byCat.set(cat, []);
-    byCat.get(cat).push(p);
+    const catKey = p.category && (p.category._id || p.category.name) ? (p.category._id ? p.category._id.toString() : p.category.name) : 'Altro';
+    if (!byCat.has(catKey)) byCat.set(catKey, { cat: p.category, items: [] });
+    byCat.get(catKey).items.push(p);
   });
   const map = new Map();
-  byCat.forEach((arr, cat) => {
+  byCat.forEach((bucket) => {
+    const arr = bucket.items;
     arr.sort((a, b) => a.name.localeCompare(b.name));
-    const base = getCategoryColor(cat);
+    const base = getCategoryColor(bucket.cat);
     const shades = generateShades(base, arr.length);
     arr.forEach((p, i) => map.set(p._id.toString(), shades[i]));
   });
@@ -175,23 +192,24 @@ const getBookingsAndPitches = async (req, res) => {
   try {
     // Recupera tutte le piazzole e formattale per FullCalendar
     const pitches = await Pitch.find()
-      .populate('category', 'name')
+      .populate('category', 'name color')
       .sort({ name: 1 });
 
     const resources = pitches.map(pitch => ({
       id: pitch._id.toString(),
       title: `${pitch.name} (${(pitch.category && pitch.category.name) || 'N/A'})`,
-      categoryName: (pitch.category && pitch.category.name) || 'N/A'
+      categoryName: (pitch.category && pitch.category.name) || 'N/A',
+      categoryColor: (pitch.category && pitch.category.color) || null
     }));
 
     // Recupera tutte le prenotazioni e formattale per FullCalendar
-    const bookings = await Booking.find()
+  const bookings = await Booking.find()
       .populate({
         path: 'pitch',
         select: 'name category',
         populate: {
-          path: 'category',
-          select: 'name'
+      path: 'category',
+      select: 'name color'
         }
       })
       .populate('createdBy', 'username role')
@@ -209,9 +227,9 @@ const getBookingsAndPitches = async (req, res) => {
         const startFormatted = formatDateToDDMMYYYY(booking.startDate);
         const endFormatted = formatDateToDDMMYYYY(booking.endDate);
 
-        const category = booking.pitch.category || {};
+  const category = booking.pitch.category || {};
         // Colore dalla sfumatura della categoria della piazzola
-        const eventColor = pitchShadeMap.get(booking.pitch._id.toString()) || getCategoryColor(category.name || '');
+  const eventColor = pitchShadeMap.get(booking.pitch._id.toString()) || getCategoryColor(category);
         const eventTextColor = getReadableTextColor(eventColor);
 
         const createdBy = booking.createdBy || {};
@@ -292,14 +310,14 @@ const getBookingsByDateRange = async (req, res) => {
     .sort({ startDate: 1 });
 
     // Prepara mappa sfumature su tutte le piazzole esistenti
-    const allPitches = await Pitch.find().populate('category', 'name').sort({ name: 1 });
+  const allPitches = await Pitch.find().populate('category', 'name color').sort({ name: 1 });
     const shadeMap = buildPitchShadeMap(allPitches);
 
-    const events = bookings
+  const events = bookings
       .map(booking => {
         if (!booking.pitch || !booking.pitch._id) return null;
-        const category = booking.pitch.category || {};
-        const bg = shadeMap.get(booking.pitch._id.toString()) || getCategoryColor(category.name || '');
+    const category = booking.pitch.category || {};
+    const bg = shadeMap.get(booking.pitch._id.toString()) || getCategoryColor(category);
         const fg = getReadableTextColor(bg);
         const createdBy = booking.createdBy || {};
         return {
@@ -700,6 +718,21 @@ const getCategories = async (req, res) => {
   }
 };
 
+// Aggiorna colore della categoria (proteggere con ruolo adeguato nel router)
+const updateCategoryColor = async (req, res) => {
+  try {
+    const Category = require('../models/Category');
+    const { id } = req.params;
+    const { color } = req.body;
+    const cat = await Category.findByIdAndUpdate(id, { color: color || null }, { new: true, runValidators: true });
+    if (!cat) return res.status(404).json({ error: true, message: 'Categoria non trovata' });
+    res.json({ success: true, category: cat });
+  } catch (error) {
+    console.error('Errore aggiornando colore categoria:', error);
+    res.status(500).json({ error: true, message: 'Errore interno aggiornando il colore' });
+  }
+};
+
 // Funzione per ottenere piazzole disponibili per categoria e periodo
 const getAvailablePitches = async (req, res) => {
   try {
@@ -876,6 +909,7 @@ module.exports = {
   deleteBooking,
   updateBookingCheckStatus,
   getCategories,
+  updateCategoryColor,
   getAvailablePitches,
   getDailyPitchAvailability,
   getPitches,

@@ -24,6 +24,131 @@ document.addEventListener('DOMContentLoaded', function() {
         '#00CED1', // Turchese scuro
         '#9932CC'  // Orchidea scuro
     ];
+
+    // -----------------------------
+    // Color utilities and fallback
+    // -----------------------------
+    const __shadeCache = new Map(); // key: `${pitchId}|${base}` -> hex color
+    function __shadeCacheKey(pitchId, base) {
+        return `${String(pitchId || 'fallback')}|${String(base || '')}`;
+    }
+    function __shadeCacheClear() {
+        try { __shadeCache.clear(); } catch(e) { /* noop */ }
+    }
+
+    function hexToRgb(hex) {
+        if (!hex) return null;
+        const cleaned = hex.replace('#','');
+        const bigint = parseInt(cleaned.length === 3 ? cleaned.split('').map(c=>c+c).join('') : cleaned, 16);
+        if (Number.isNaN(bigint)) return null;
+        const r = (bigint >> 16) & 255;
+        const g = (bigint >> 8) & 255;
+        const b = bigint & 255;
+        return { r, g, b };
+    }
+
+    function rgbToHex(r, g, b) {
+        const toHex = (n) => n.toString(16).padStart(2, '0');
+        return `#${toHex(Math.max(0, Math.min(255, Math.round(r))))}${toHex(Math.max(0, Math.min(255, Math.round(g))))}${toHex(Math.max(0, Math.min(255, Math.round(b))))}`;
+    }
+
+    // Lighten/darken hex by percent (-40..+40)
+    function shadeHexColor(hex, percent) {
+        const rgb = hexToRgb(hex);
+        if (!rgb) return hex || '#607d8b';
+        const p = Math.max(-90, Math.min(90, percent || 0)) / 100;
+        const r = rgb.r + (p > 0 ? (255 - rgb.r) * p : rgb.r * p);
+        const g = rgb.g + (p > 0 ? (255 - rgb.g) * p : rgb.g * p);
+        const b = rgb.b + (p > 0 ? (255 - rgb.b) * p : rgb.b * p);
+        return rgbToHex(r, g, b);
+    }
+
+    function getReadableTextColor(hex) {
+        const rgb = hexToRgb(hex);
+        if (!rgb) return '#ffffff';
+        // WCAG relative luminance heuristic
+        const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+        return luminance > 0.6 ? '#000000' : '#ffffff';
+    }
+
+    function hashToPercent(str) {
+        // Deterministic small variation based on id; output in [-28, +12]
+        let h = 0;
+        for (let i = 0; i < (str || '').length; i++) {
+            h = (h << 5) - h + str.charCodeAt(i);
+            h |= 0;
+        }
+        // Map to 0..1 then to range
+        const n = (Math.abs(h) % 1000) / 1000; // 0..1
+        return Math.round((-28 + n * 40));
+    }
+
+    // Mapping from pitch/resource id -> category base color (from /api/data resources)
+    let __resourceBaseByPitchId = new Map();
+    function __setResourceBaseColors(resources) {
+        try {
+            __resourceBaseByPitchId = new Map();
+            (resources || []).forEach(r => {
+                if (!r || !r.id) return;
+                if (r.categoryColor) {
+                    __resourceBaseByPitchId.set(String(r.id), r.categoryColor);
+                }
+            });
+        } catch (e) { /* noop */ }
+    }
+
+    // Mapping from category id/name -> color (from /api/categories)
+    let __categoryColorById = new Map();
+    let __categoryColorByName = new Map();
+    async function __loadCategoriesColors() {
+        try {
+            const res = await fetch('/api/categories', { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) return;
+            const categories = await res.json();
+            __categoryColorById = new Map();
+            __categoryColorByName = new Map();
+            (categories || []).forEach(c => {
+                if (!c) return;
+                if (c._id && c.color) __categoryColorById.set(String(c._id), c.color);
+                if (c.name && c.color) __categoryColorByName.set(String(c.name), c.color);
+            });
+        } catch (e) { /* noop */ }
+    }
+
+    function resolveEventColors(eventObj) {
+        const props = (eventObj && eventObj.extendedProps) || {};
+        const pitchId = props.pitchId
+            || props.pitch
+            || props.pitch_id
+            || props.pitchName
+            || (typeof eventObj.getResources === 'function' ? (eventObj.getResources()?.[0]?.id) : undefined)
+            || (typeof eventObj.getResourceId === 'function' ? eventObj.getResourceId() : undefined);
+        // Always compute from category base to ensure live updates; ignore server-provided event colors
+        let base = props.categoryColor
+            || (props.categoryId ? __categoryColorById.get(String(props.categoryId)) : undefined)
+            || (props.categoryName ? __categoryColorByName.get(String(props.categoryName)) : undefined)
+            || __resourceBaseByPitchId.get(String(pitchId || ''))
+            || props.category?.color
+            || null;
+        if (!base) {
+            // Stable fallback based on categoryId or categoryName
+            const catKey = props.categoryId || props.category?._id || props.categoryName || 'default';
+            let h = 0; const s = String(catKey);
+            for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; }
+            const idx = Math.abs(h) % uniqueBookingColors.length;
+            base = uniqueBookingColors[idx] || '#3f51b5';
+        }
+        const cacheKey = __shadeCacheKey(pitchId, base);
+        let bg = __shadeCache.get(cacheKey);
+        if (!bg) {
+            const percent = hashToPercent(String(pitchId || 'fallback'));
+            bg = shadeHexColor(base, percent);
+            __shadeCache.set(cacheKey, bg);
+        }
+        const border = bg;
+        const text = getReadableTextColor(bg);
+        return { backgroundColor: bg, borderColor: border, textColor: text };
+    }
     
     // Funzione helper per convertire da formato ISO a dd/mm/yyyy
     function formatISOToDDMMYYYY(isoDate) {
@@ -158,8 +283,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Funzione per inizializzare il calendario
     async function initializeCalendar() {
         try {
-            // Carica i dati
+            // Carica colori categorie e dati
+            await __loadCategoriesColors();
             const calendarData = await loadCalendarData();
+            // Prepara mappa base color per pitch/resource
+            __setResourceBaseColors(calendarData.resources);
             
             // Inizializza FullCalendar
             calendar = new FullCalendar.Calendar(calendarEl, {
@@ -217,6 +345,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Callback per il rendering degli eventi
                 eventDidMount: function(info) {
+                    // Enforce colors for both grid and list views
+                    try {
+                        const colors = resolveEventColors(info.event);
+                        if (colors.backgroundColor) {
+                            info.el.style.backgroundColor = colors.backgroundColor;
+                            info.el.style.borderColor = colors.borderColor || colors.backgroundColor;
+                            info.el.style.color = colors.textColor || '#fff';
+                            // Some sub-elements in list view need explicit color
+                            const innerEls = info.el.querySelectorAll('*, .fc-list-event-graphic, .fc-list-event-title, .fc-event-title');
+                            innerEls.forEach(e => { e.style.color = colors.textColor || '#fff'; });
+                            // Dots/borders
+                            const dot = info.el.querySelector('.fc-event-dot, .fc-list-event-dot');
+                            if (dot) dot.style.borderColor = colors.borderColor || colors.backgroundColor;
+                        }
+                    } catch(e) {
+                        // no-op if anything goes wrong
+                    }
                     // Aggiungi tooltip con informazioni dettagliate
                     if (info.event.extendedProps) {
                         const props = info.event.extendedProps;
@@ -1345,8 +1490,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!calendar) return;
         
         try {
+            // Clear color cache so category color changes are reflected
+            __shadeCacheClear();
             const calendarData = await loadCalendarData();
             
+            // Prepara mappa base color per pitch/resource (ricarica anche palette categorie)
+            await __loadCategoriesColors();
+            __setResourceBaseColors(calendarData.resources);
             // Rimuovi tutti gli eventi esistenti
             calendar.removeAllEvents();
             

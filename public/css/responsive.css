@@ -301,8 +301,7 @@
     }
 }
 
-/* Giorni non prenotabili (passato) */
+/* Giorni passati: mantieni solo un accenno visivo, clic abilitato */
 .eg-nonbookable {
-    opacity: 0.5;
-    pointer-events: none;
+    opacity: 0.85;
 }

@@ -193,12 +193,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 locale: 'it',
                 firstDay: 1, // Lunedì come primo giorno della settimana
                 
-                // Giorni non prenotabili (solo stile; i click sono bloccati da dateClick)
-                dayCellClassNames: (arg) => {
-                    const today = new Date(); today.setHours(0,0,0,0);
-                    const d = new Date(arg.date.getFullYear(), arg.date.getMonth(), arg.date.getDate());
-                    return d < today ? ['eg-nonbookable'] : [];
-                },
+                // Giorni passati selezionabili: nessuna classe di blocco
+                dayCellClassNames: () => [],
 
                 // Eventi (prenotazioni)
                 events: calendarData.events,
@@ -241,17 +237,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 },
                 
-                // Callback per click sugli eventi (modifica prenotazione)
+                // Callback per click sugli eventi
                 eventClick: function(info) {
-                    // Controlla se l'utente è un visualizzatore - i visualizzatori non possono modificare prenotazioni
-                    if (window.operatorData && window.operatorData.role === 'viewer') {
-                        return; // Non fare nulla se l'utente è un visualizzatore
-                    }
-                    
                     const event = info.event;
                     const props = event.extendedProps;
-                    
-                    // Mostra modal per modifica prenotazione
+                    // I visualizzatori possono solo gestire check-in / check-out
+                    if (window.operatorData && window.operatorData.role === 'viewer') {
+                        showCheckStatusModal(event, props);
+                        return;
+                    }
+
+                    // Ruoli non-viewer: apri il modal completo di modifica
                     showEditBookingModal(event, props);
                 },
                 
@@ -261,11 +257,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (window.operatorData && window.operatorData.role === 'viewer') {
                         return; // Non fare nulla se l'utente è un visualizzatore
                     }
-                    // Blocca giorni nel passato
-                    const today = new Date(); today.setHours(0,0,0,0);
+                    // Consenti selezione anche di giorni nel passato
                     const d = new Date(info.date.getFullYear(), info.date.getMonth(), info.date.getDate());
-                    if (d < today) return;
-                    // Prima mostra una lista disponibilità dettagliata
+                    // Mostra lista disponibilità e poi modal creazione
                     showDayAvailabilityModal(d, () => showCreateBookingModal(info.date, null));
                 }
             });
@@ -511,6 +505,14 @@ document.addEventListener('DOMContentLoaded', function() {
                                                    value="${formattedEndDate}" required>
                                         </div>
                                     </div>
+                                </div>
+                                <div class="mb-3 form-check">
+                                    <input type="checkbox" class="form-check-input" id="createCheckedIn" name="checkedIn">
+                                    <label class="form-check-label" for="createCheckedIn">Check-in effettuato</label>
+                                </div>
+                                <div class="mb-3 form-check">
+                                    <input type="checkbox" class="form-check-input" id="createCheckedOut" name="checkedOut">
+                                    <label class="form-check-label" for="createCheckedOut">Check-out effettuato</label>
                                 </div>
                                 <div class="mb-3">
                                     <label for="createCategorySelect" class="form-label">Categoria *</label>
@@ -941,6 +943,14 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <option value="" disabled selected>Seleziona una piazzola</option>
                                     </select>
                                 </div>
+                                <div class="mb-2 form-check">
+                                    <input type="checkbox" class="form-check-input" id="editCheckedIn" name="checkedIn" ${props.checkedIn ? 'checked' : ''}>
+                                    <label class="form-check-label" for="editCheckedIn">Check-in effettuato</label>
+                                </div>
+                                <div class="mb-3 form-check">
+                                    <input type="checkbox" class="form-check-input" id="editCheckedOut" name="checkedOut" ${props.checkedOut ? 'checked' : ''}>
+                                    <label class="form-check-label" for="editCheckedOut">Check-out effettuato</label>
+                                </div>
                                 <div class="alert alert-warning">
                                     <i class="bi bi-exclamation-triangle me-2"></i>
                                     <strong>Attenzione:</strong> La modifica delle date o della piazzola potrebbe causare conflitti con altre prenotazioni.
@@ -1048,6 +1058,81 @@ document.addEventListener('DOMContentLoaded', function() {
             this.remove();
         });
     }
+
+    // Modal leggero per consentire a tutti (inclusi i visualizzatori) di togglare check-in / check-out
+    function showCheckStatusModal(event, props) {
+        const isMobile = window.innerWidth < 768;
+        const modalHtml = `
+            <div class="modal fade" id="checkStatusModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog ${isMobile ? 'modal-fullscreen-sm-down' : ''}">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-people-check me-2"></i>
+                                Check-in / Check-out
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form id="checkStatusForm">
+                            <div class="modal-body">
+                                <div class="mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="viewerCheckedIn" ${props.checkedIn ? 'checked' : ''}>
+                                        <label class="form-check-label" for="viewerCheckedIn">Check-in effettuato</label>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="viewerCheckedOut" ${props.checkedOut ? 'checked' : ''}>
+                                        <label class="form-check-label" for="viewerCheckedOut">Check-out effettuato</label>
+                                    </div>
+                                </div>
+                                <small class="text-muted d-block">Puoi modificare solo lo stato di check-in/check-out.</small>
+                            </div>
+                            <div class="modal-footer ${isMobile ? 'd-grid gap-2' : ''}">
+                                <button type="button" class="btn btn-secondary ${isMobile ? 'btn-lg' : ''}" data-bs-dismiss="modal">Chiudi</button>
+                                <button type="submit" class="btn btn-primary ${isMobile ? 'btn-lg' : ''}">
+                                    <i class="bi bi-check-lg me-2"></i>Salva
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>`;
+
+        // Rimuovi modal esistente se presente
+        const existing = document.getElementById('checkStatusModal');
+        if (existing) existing.remove();
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('checkStatusModal'));
+        modal.show();
+
+        document.getElementById('checkStatusForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const checkedIn = document.getElementById('viewerCheckedIn').checked;
+            const checkedOut = document.getElementById('viewerCheckedOut').checked;
+            try {
+                const res = await fetch(`/api/bookings/${event.id}/check-status`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ checkedIn, checkedOut })
+                });
+                if (!res.ok) throw new Error('Aggiornamento stato fallito');
+                showSuccessMessage('Stato aggiornato');
+                modal.hide();
+                await refreshCalendar();
+                await updateDashboardStats();
+            } catch (err) {
+                console.error(err);
+                showErrorMessage('Impossibile aggiornare lo stato.');
+            }
+        });
+
+        document.getElementById('checkStatusModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+    }
     
     // Funzione per gestire la creazione di una nuova prenotazione
     async function handleCreateBooking(form, modal) {
@@ -1058,6 +1143,8 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const formData = new FormData(form);
             const bookingData = Object.fromEntries(formData.entries());
+            bookingData.checkedIn = form.querySelector('[name="checkedIn"]').checked;
+            bookingData.checkedOut = form.querySelector('[name="checkedOut"]').checked;
             
             // Mostra loading sul pulsante submit
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creando...';
@@ -1111,6 +1198,12 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const formData = new FormData(form);
             const bookingData = Object.fromEntries(formData.entries());
+            if (form.querySelector('[name="checkedIn"]')) {
+                bookingData.checkedIn = form.querySelector('[name="checkedIn"]').checked;
+            }
+            if (form.querySelector('[name="checkedOut"]')) {
+                bookingData.checkedOut = form.querySelector('[name="checkedOut"]').checked;
+            }
             
             // Mostra loading sul pulsante submit
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
@@ -1318,6 +1411,42 @@ document.addEventListener('DOMContentLoaded', function() {
         refresh: refreshCalendar,
         getCalendar: () => calendar
     };
+
+    // Click handler: Arrivi di oggi -> marca come arrivato (check-in true)
+    document.addEventListener('click', async function(e) {
+        const el = e.target.closest('[data-booking-arrival]');
+        if (!el) return;
+        // I visualizzatori possono marcare l'arrivo
+        const already = el.getAttribute('data-checked-in') === 'true';
+        if (already) return; // già arrivato
+        const bookingId = el.getAttribute('data-booking-id');
+        if (!bookingId) return;
+        try {
+            // Ottimistica: aggiorna UI
+            el.classList.remove('bg-light');
+            el.classList.add('bg-success-subtle','border','border-success');
+            const badge = el.querySelector('.badge');
+            if (badge) {
+                badge.className = 'badge bg-success';
+                badge.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Arrivato';
+            }
+            el.setAttribute('data-checked-in','true');
+            // API update
+            const res = await fetch(`/api/bookings/${bookingId}/check-status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ checkedIn: true })
+            });
+            if (!res.ok) {
+                throw new Error('Aggiornamento check-in fallito');
+            }
+            // Aggiorna statistiche
+            await updateDashboardStats();
+        } catch (err) {
+            console.error(err);
+            showErrorMessage('Impossibile segnare come arrivato.');
+        }
+    });
 });
 
 // Utilità globali fuori dal DOMContentLoaded

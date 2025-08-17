@@ -50,6 +50,62 @@ const getCategoryColor = (categoryName) => {
   return colors[categoryName] || '#6c757d';
 };
 
+// Utils colori: conversione e generazione sfumature per categoria
+function hexToRgb(hex) {
+  const clean = hex.replace('#', '');
+  const full = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean;
+  const n = parseInt(full, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function rgbToHex(r, g, b) {
+  const h = (v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0');
+  return `#${h(r)}${h(g)}${h(b)}`;
+}
+
+// Scurisce un colore mescolando verso il nero
+function darkenHex(hex, t) { // t in [0,1]
+  const { r, g, b } = hexToRgb(hex);
+  return rgbToHex(Math.round(r * (1 - t)), Math.round(g * (1 - t)), Math.round(b * (1 - t)));
+}
+
+function generateShades(baseHex, count) {
+  if (count <= 1) return [darkenHex(baseHex, 0.15)];
+  const shades = [];
+  const minT = 0.05, maxT = 0.40; // gamma leggibile con testo bianco
+  for (let i = 0; i < count; i++) {
+    const t = minT + (maxT - minT) * (i / Math.max(1, count - 1));
+    shades.push(darkenHex(baseHex, t));
+  }
+  return shades;
+}
+
+// Costruisce mappa piazzola->sfumatura basata sulla categoria
+function buildPitchShadeMap(pitches) {
+  const byCat = new Map();
+  pitches.forEach(p => {
+    const cat = p.category && p.category.name ? p.category.name : 'Altro';
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat).push(p);
+  });
+  const map = new Map();
+  byCat.forEach((arr, cat) => {
+    arr.sort((a, b) => a.name.localeCompare(b.name));
+    const base = getCategoryColor(cat);
+    const shades = generateShades(base, arr.length);
+    arr.forEach((p, i) => map.set(p._id.toString(), shades[i]));
+  });
+  return map;
+}
+
+// Determina colore testo leggibile su uno sfondo dato
+function getReadableTextColor(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  // YIQ/brightness heuristic
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000; // 0..255
+  return brightness > 160 ? '#000000' : '#ffffff';
+}
+
 // Helper per serializzare date in YYYY-MM-DD in locale (evita shift timezone)
 const formatLocalYMD = (date) => {
   const d = new Date(date);
@@ -77,12 +133,9 @@ const renderDashboard = async (req, res) => {
       endDate: { $gte: today }
     });
 
-    // Prenotazioni future (prossime 7 giorni)
-    const nextWeek = new Date(today);
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    
+    // Arrivi di oggi (startDate in [oggi, domani))
     const upcomingBookings = await Booking.find({
-      startDate: { $gte: tomorrow, $lte: nextWeek }
+      startDate: { $gte: today, $lt: tomorrow }
     })
     .populate('pitch', 'name')
     .populate('createdBy', 'username')
@@ -93,7 +146,8 @@ const renderDashboard = async (req, res) => {
     const upcomingBookingsFormatted = upcomingBookings.map(booking => ({
       ...booking.toObject(),
       startDateFormatted: formatDateToDDMMYYYY(booking.startDate),
-      endDateFormatted: formatDateToDDMMYYYY(booking.endDate)
+      endDateFormatted: formatDateToDDMMYYYY(booking.endDate),
+      checkedIn: booking.checkedIn === true
     }));
 
     res.render('dashboard/dashboard', {
@@ -143,13 +197,17 @@ const getBookingsAndPitches = async (req, res) => {
       .populate('createdBy', 'username role')
       .sort({ startDate: 1 });
 
-    // Formatta gli eventi per FullCalendar con colori per piazzola
-    const events = bookings.map((booking) => {
+    // Costruisci mappa sfumature categoria->piazzole
+    const pitchShadeMap = buildPitchShadeMap(pitches);
+
+    // Formatta gli eventi per FullCalendar con sfumature per categoria
+  const events = bookings.map((booking) => {
       const startFormatted = formatDateToDDMMYYYY(booking.startDate);
       const endFormatted = formatDateToDDMMYYYY(booking.endDate);
       
-      // Assegna un colore unico basato sulla piazzola
-      const eventColor = getPitchColor(booking.pitch._id.toString(), pitches);
+      // Colore dalla sfumatura della categoria della piazzola
+  const eventColor = pitchShadeMap.get(booking.pitch._id.toString()) || getCategoryColor(booking.pitch.category.name);
+  const eventTextColor = getReadableTextColor(eventColor);
       
       return {
         id: booking._id.toString(),
@@ -169,14 +227,17 @@ const getBookingsAndPitches = async (req, res) => {
           createdAt: booking.createdAt,
           updatedAt: booking.updatedAt,
           startDateFormatted: startFormatted,
-          endDateFormatted: endFormatted
+          endDateFormatted: endFormatted,
+          checkedIn: booking.checkedIn,
+          checkedOut: booking.checkedOut
         },
         className: `pitch-${booking.pitch._id.toString()}`,
         backgroundColor: eventColor,
-        borderColor: eventColor,
-        textColor: '#ffffff'
+  borderColor: eventColor,
+  textColor: eventTextColor
       };
-    });    // Risposta in formato JSON per FullCalendar
+  });
+  // Risposta in formato JSON per FullCalendar
     res.json({
       resources,
       events
@@ -214,25 +275,40 @@ const getBookingsByDateRange = async (req, res) => {
         { startDate: { $lte: startDate }, endDate: { $gte: endDate } }
       ]
     })
-    .populate('pitch', 'name')
+    .populate({
+      path: 'pitch',
+      select: 'name category',
+      populate: { path: 'category', select: 'name' }
+    })
     .populate('createdBy', 'username role')
     .sort({ startDate: 1 });
 
-    const events = bookings.map(booking => ({
-      id: booking._id.toString(),
-      resourceId: booking.pitch._id.toString(),
-      title: booking.guestName,
-      start: formatLocalYMD(booking.startDate),
-      end: formatLocalYMD(booking.endDate),
-      extendedProps: {
-        guestName: booking.guestName,
-        pitchName: booking.pitch.name,
-        createdBy: booking.createdBy.username,
-        duration: booking.getDuration()
-      },
-      backgroundColor: getBookingColor(booking.createdBy.role),
-      borderColor: getBookingColor(booking.createdBy.role)
-    }));
+    // Prepara mappa sfumature su tutte le piazzole esistenti
+    const allPitches = await Pitch.find().populate('category', 'name').sort({ name: 1 });
+    const shadeMap = buildPitchShadeMap(allPitches);
+
+    const events = bookings.map(booking => {
+      const bg = shadeMap.get(booking.pitch._id.toString()) || getCategoryColor(booking.pitch.category.name);
+      const fg = getReadableTextColor(bg);
+      return {
+        id: booking._id.toString(),
+        resourceId: booking.pitch._id.toString(),
+        title: booking.guestName,
+        start: formatLocalYMD(booking.startDate),
+        end: formatLocalYMD(booking.endDate),
+        extendedProps: {
+          guestName: booking.guestName,
+          pitchName: booking.pitch.name,
+          createdBy: booking.createdBy.username,
+          duration: booking.getDuration(),
+          checkedIn: booking.checkedIn,
+          checkedOut: booking.checkedOut
+        },
+        backgroundColor: bg,
+        borderColor: bg,
+        textColor: fg
+      };
+    });
 
     res.json({ events });
 
@@ -281,7 +357,7 @@ const getDashboardStats = async (req, res) => {
 // Funzione per creare una nuova prenotazione
 const createBooking = async (req, res) => {
   try {
-    const { guestName, start, end, pitchId } = req.body;
+  const { guestName, start, end, pitchId, checkedIn, checkedOut } = req.body;
 
     // Validazione dei dati di input
     if (!guestName || !start || !end || !pitchId) {
@@ -338,7 +414,9 @@ const createBooking = async (req, res) => {
       startDate: startDate,
       endDate: endDate,
       pitch: pitchId,
-      createdBy: req.session.user.id
+      createdBy: req.session.user.id,
+      checkedIn: checkedIn === true || checkedIn === 'true' || checkedIn === 'on',
+      checkedOut: checkedOut === true || checkedOut === 'true' || checkedOut === 'on'
     });
 
     await newBooking.save();
@@ -349,7 +427,7 @@ const createBooking = async (req, res) => {
 
     console.log(`Prenotazione creata: ${newBooking.guestName} (${pitch.name}) da ${req.session.user ? req.session.user.username : 'sconosciuto'}`);
 
-    res.status(201).json({
+  res.status(201).json({
       success: true,
       message: 'Prenotazione creata con successo',
       booking: newBooking
@@ -377,8 +455,8 @@ const createBooking = async (req, res) => {
 // Funzione per aggiornare una prenotazione esistente
 const updateBooking = async (req, res) => {
   try {
-    const { bookingId } = req.params;
-    const { guestName, start, end, pitchId } = req.body;
+  const { bookingId } = req.params;
+  const { guestName, start, end, pitchId, checkedIn, checkedOut } = req.body;
 
     // Verifica che la prenotazione esista
     const existingBooking = await Booking.findById(bookingId);
@@ -392,7 +470,7 @@ const updateBooking = async (req, res) => {
     // Prepara i dati per l'aggiornamento
     const updateData = {};
     
-    if (guestName && guestName.trim() !== '') {
+  if (guestName && guestName.trim() !== '') {
       updateData.guestName = guestName.trim();
     }
 
@@ -418,7 +496,7 @@ const updateBooking = async (req, res) => {
       updateData.endDate = endDate;
     }
 
-    if (pitchId) {
+  if (pitchId) {
       // Verifica che la piazzola esista
       const pitch = await Pitch.findById(pitchId);
       if (!pitch) {
@@ -428,6 +506,17 @@ const updateBooking = async (req, res) => {
         });
       }
       updateData.pitch = pitchId;
+    }
+    // Aggiorna flag check-in/out se presenti
+    if (typeof checkedIn !== 'undefined') {
+      updateData.checkedIn = (checkedIn === true || checkedIn === 'true' || checkedIn === 'on');
+    }
+    if (typeof checkedOut !== 'undefined') {
+      updateData.checkedOut = (checkedOut === true || checkedOut === 'true' || checkedOut === 'on');
+      if (updateData.checkedOut && updateData.checkedIn === undefined) {
+        // Se si marca checkout, assicura checkedIn
+        updateData.checkedIn = true;
+      }
     }
 
     // Validazione delle date se entrambe sono fornite o una è cambiata
@@ -467,12 +556,12 @@ const updateBooking = async (req, res) => {
     // Aggiorna la prenotazione
     const updatedBooking = await Booking.findByIdAndUpdate(
       bookingId,
-      updateData,
+  updateData,
       { new: true, runValidators: true }
     );
 
     // Popola i dati per la risposta
-    await updatedBooking.populate('pitch', 'name category');
+  await updatedBooking.populate('pitch', 'name category');
     await updatedBooking.populate('createdBy', 'username role');
 
     console.log(`Prenotazione aggiornata: ${updatedBooking.guestName} (ID: ${bookingId}) da ${req.session.user ? req.session.user.username : 'sconosciuto'}`);
@@ -499,6 +588,38 @@ const updateBooking = async (req, res) => {
       error: 'Errore del server',
       message: 'Errore interno nell\'aggiornamento della prenotazione'
     });
+  }
+};
+
+// Aggiorna solo check-in / check-out (permesso a tutti gli utenti autenticati)
+const updateBookingCheckStatus = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { checkedIn, checkedOut } = req.body;
+
+    const existingBooking = await Booking.findById(bookingId);
+    if (!existingBooking) {
+      return res.status(404).json({ error: 'Prenotazione non trovata' });
+    }
+
+    const updateData = {};
+    if (typeof checkedIn !== 'undefined') {
+      updateData.checkedIn = (checkedIn === true || checkedIn === 'true' || checkedIn === 'on');
+    }
+    if (typeof checkedOut !== 'undefined') {
+      updateData.checkedOut = (checkedOut === true || checkedOut === 'true' || checkedOut === 'on');
+      if (updateData.checkedOut && updateData.checkedIn === undefined) {
+        updateData.checkedIn = true; // se fai checkout, forza check-in
+      }
+    }
+
+    const updated = await Booking.findByIdAndUpdate(bookingId, updateData, { new: true, runValidators: true });
+    await updated.populate('pitch', 'name category');
+    await updated.populate('createdBy', 'username role');
+    return res.json({ success: true, message: 'Stato aggiornato', booking: updated });
+  } catch (error) {
+    console.error('Errore aggiornando check-status:', error);
+    return res.status(500).json({ error: 'Errore del server' });
   }
 };
 
@@ -740,6 +861,7 @@ module.exports = {
   createBooking,
   updateBooking,
   deleteBooking,
+  updateBookingCheckStatus,
   getCategories,
   getAvailablePitches,
   getDailyPitchAvailability,

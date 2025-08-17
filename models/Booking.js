@@ -26,6 +26,15 @@ const bookingSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Operator',
     required: [true, 'L\'operatore che ha creato la prenotazione è obbligatorio']
+  },
+  // Stato operativo: check-in e check-out effettuati
+  checkedIn: {
+    type: Boolean,
+    default: false
+  },
+  checkedOut: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true // Aggiunge automaticamente createdAt e updatedAt
@@ -37,6 +46,8 @@ bookingSchema.index({ endDate: 1 });
 bookingSchema.index({ pitch: 1 });
 bookingSchema.index({ createdBy: 1 });
 bookingSchema.index({ startDate: 1, endDate: 1, pitch: 1 }); // Indice composto per verificare disponibilità
+bookingSchema.index({ checkedIn: 1 });
+bookingSchema.index({ checkedOut: 1 });
 
 // Validazione personalizzata per le date
 bookingSchema.pre('save', function(next) {
@@ -44,15 +55,26 @@ bookingSchema.pre('save', function(next) {
   if (this.endDate <= this.startDate) {
     return next(new Error('La data di fine deve essere successiva alla data di inizio'));
   }
-  
-  // Verifica che le date non siano nel passato
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  if (this.startDate < today) {
-    return next(new Error('La data di inizio non può essere nel passato'));
+  // Coerenza stato: non si può fare check-out senza check-in
+  if (this.checkedOut && !this.checkedIn) {
+    this.checkedIn = true;
   }
-  
+  next();
+});
+
+// Garantisce coerenza anche sugli update atomici
+bookingSchema.pre('findOneAndUpdate', function(next) {
+  const update = this.getUpdate() || {};
+  const $set = update.$set || update;
+  if ($set.endDate && $set.startDate && $set.endDate <= $set.startDate) {
+    return next(new Error('La data di fine deve essere successiva alla data di inizio'));
+  }
+  if (($set.checkedOut === true || $set.checkedOut === 'true' || $set.checkedOut === 'on') && !$set.checkedIn) {
+    // Forza checkedIn se si imposta checkedOut a true
+    if (!update.$set) update.$set = {};
+    update.$set.checkedIn = true;
+    this.setUpdate(update);
+  }
   next();
 });
 

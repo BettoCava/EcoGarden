@@ -23,6 +23,9 @@ const {
   getPitches,
   getPitchById
 } = require('./controllers/dashboardController');
+const {
+  updateBookingCheckStatus,
+} = require('./controllers/dashboardController');
 // Controllers
 const dashboardController = require('./controllers/dashboardController');
 const userController = require('./controllers/userController');
@@ -108,6 +111,8 @@ app.get('/api/stats', authMiddleware.requireAuth, getDashboardStats);
 // Rotte per gestione prenotazioni (solo operatori e admin)
 app.post('/api/bookings', authMiddleware.requireBookingManagement, createBooking);
 app.put('/api/bookings/:bookingId', authMiddleware.requireBookingManagement, updateBooking);
+// Endpoint dedicato per aggiornare solo lo stato di check-in/check-out (consentito anche ai visualizzatori)
+app.patch('/api/bookings/:bookingId/check-status', authMiddleware.requireAuth, updateBookingCheckStatus);
 app.delete('/api/bookings/:bookingId', authMiddleware.requireBookingManagement, deleteBooking);
 
 // Rotte per gestione utenti (solo admin)
